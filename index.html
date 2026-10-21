@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>可玩原型合集 · IIGO 玩法实验室</title>
+<style>
+:root{--bg:#0f1020;--card:#191a30;--fg:#f2f3ff;--dim:#a6a8c8;--accent:#7c8cff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#262a55 0%,var(--bg) 60%);color:var(--fg);
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft Yahei",sans-serif;padding:28px 18px 48px}
+.wrap{max-width:960px;margin:0 auto}h1{font-size:26px;margin:6px 0 6px}p.lead{color:var(--dim);margin:0 0 26px;font-size:14px;line-height:1.7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+a.card{display:block;background:var(--card);border-radius:16px;overflow:hidden;text-decoration:none;color:inherit;border:1px solid #2a2c4a;transition:.18s}
+a.card:hover{transform:translateY(-3px);border-color:var(--accent)}
+.shot{width:100%;aspect-ratio:3/4;object-fit:cover;object-position:top center;display:block;background:#0b0c18}
+.meta{padding:14px 15px 16px}h2{font-size:17px;margin:0 0 6px}.blurb{color:var(--dim);font-size:13px;line-height:1.6;margin:0 0 10px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}.tag{font-size:11px;color:#c8cbff;background:#262a55;border-radius:999px;padding:3px 9px}
+.play{margin-top:11px;font-size:13px;color:var(--accent);font-weight:600}
+footer{margin-top:34px;color:#7b7da0;font-size:12px;line-height:1.8;border-top:1px solid #262a4a;padding-top:16px}
+</style></head><body><div class="wrap">
+<h1>可玩原型合集</h1>
+<p class="lead">A+B 机制融合产出的核心玩法原型，浏览器直接玩，无需下载。</p>
+<div class="grid">
+<a class="card" href="yarn-queue/"><img class="shot" src="yarn-queue/cover.png" alt="织线工坊">
+<div class="meta"><h2>织线工坊</h2><p class="blurb">点同色线轴把针织图案上的针脚拆成线球，送进 3 格加工队列自动消化。队列满或线轴用完即败。</p><div class="tags"><span class="tag">A+B 机制融合</span><span class="tag">Yarn Flow × Food Hunt</span><span class="tag">可通关</span></div><div class="play">开始游戏 →</div></div></a>
+<a class="card" href="crowd-block-evac/"><img class="shot" src="crowd-block-evac/cover.png" alt="人群撤离">
+<div class="meta"><h2>人群撤离</h2><p class="blurb">在马赛克棋盘里点选同色的俄罗斯方块人群组，整组滑出进入底部巴士格撤离。</p><div class="tags"><span class="tag">A+B 机制融合</span><span class="tag">Tetra Bus × Color Block Jam</span><span class="tag">真贴图</span></div><div class="play">开始游戏 →</div></div></a>
+<a class="card" href="conveyor-commute/"><img class="shot" src="conveyor-commute/cover.png" alt="通勤者传送">
+<div class="meta"><h2>通勤者传送</h2><p class="blurb">点休息区座位上的同色通勤者组，送上环形传送带送往出口闸口，座位容量上限 5。</p><div class="tags"><span class="tag">A+B 机制融合</span><span class="tag">Seat Away × Card Factory</span></div><div class="play">开始游戏 →</div></div></a>
+</div>
+<footer>本合集中的游戏由「核心玩法融合 → 玩法图 → 可玩原型」流水线生成：机制融合自 Pixel Flow 家族的逆向结论，代码由 DeepSeek 编写，验收由浏览器实测与程序化试玩完成。<br>纯前端单文件，无追踪、无数据上报，可离线打开。</footer>
+</div></body></html>

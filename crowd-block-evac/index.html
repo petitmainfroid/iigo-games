@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Block Puzzle</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #1a1a1a;
+      overflow: hidden;
+    }
+    canvas {
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+  </style>
+<link rel="icon" href="data:,"></head>
+<body>
+  <canvas id="game" width="768" height="1376"></canvas>
+  <script>
+    /*
+     * 分层结构说明：
+     * 背景层: 清屏颜色，棋盘的底座。
+     * 棋盘层: 深色槽位与网格格子绘制。
+     * 实体层: 方块与人群组 (使用 assets_named 贴图)。
+     * UI层: HUD显示 (Level, Groups)，重置按钮，底部巴士。
+     * 特效层: 非法移动时的棋盘抖动效果。
+     * 弹窗层: 胜利结算界面。
+     */
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    // 游戏常量
+    const COLS = 6;
+    const ROWS = 8;
+    const CELL_W = 120;
+    const CELL_H = 130;
+    const BOARD_X = 24;
+    const BOARD_Y = 160;
+    const BOARD_W = COLS * CELL_W;
+    const BOARD_H = ROWS * CELL_H;
+
+    // 素材清单
+    const TILES = {
+      red: 'tile_red',
+      blue: 'tile_blue',
+      yellow: 'tile_yellow',
+      orange: 'tile_orange',
+      green: 'group_S_green' //【素材存疑】绿色单独瓦片缺失，用group_S_green观感代替
+    };
+
+    const GROUP_IMAGES = {
+      T_red: 'group_T_red',
+      L_blue: 'group_L_blue',
+      S_green: 'group_S_green'
+    };
+
+    const BLOCK_COLORS = {
+      red: '#e74c3c',
+      blue: '#3498db',
+      green: '#2ecc71',
+      yellow: '#f1c40f',
+      orange: '#e67e22'
+    };
+
+    // 形状定义
+    const T_SHAPE = [{c:0, r:0}, {c:1, r:0}, {c:2, r:0}, {c:1, r:1}];
+    const L_SHAPE = [{c:0, r:0}, {c:0, r:1}, {c:0, r:2}, {c:1, r:2}];
+    const S_SHAPE = [{c:1, r:0}, {c:2, r:0}, {c:0, r:1}, {c:1, r:1}];
+
+    // 关卡数据
+    const LEVELS = [
+      {
+        groupsLeft: 3,
+        blocks: [
+          { c:0, r:0, color:'red' }, { c:1, r:0, color:'red' }, { c:2, r:0, color:'red' }, { c:1, r:1, color:'red' },
+          { c:3, r:0, color:'blue' }, { c:3, r:1, color:'blue' }, { c:3, r:2, color:'blue' }, { c:4, r:2, color:'blue' },
+          { c:1, r:4, color:'green' }, { c:2, r:4, color:'green' }, { c:0, r:5, color:'green' }, { c:1, r:5, color:'green' }
+        ]
+      },
+      {
+        groupsLeft: 4,
+        blocks: [
+          { c:0, r:0, color:'red' }, { c:1, r:0, color:'red' }, { c:2, r:0, color:'red' }, { c:1, r:1, color:'red' },
+          { c:3, r:0, color:'blue' }, { c:3, r:1, color:'blue' }, { c:3, r:2, color:'blue' }, { c:4, r:2, color:'blue' },
+          { c:1, r:3, color:'green' }, { c:2, r:3, color:'green' }, { c:0, r:4, color:'green' }, { c:1, r:4, color:'green' },
+          { c:3, r:4, color:'orange' }, { c:3, r:5, color:'orange' }, { c:3, r:6, color:'orange' }, { c:4, r:6, color:'orange' }
+        ]
+      },
+      {
+        groupsLeft: 5,
+        blocks: [
+          { c:0, r:0, color:'red' }, { c:1, r:0, color:'red' }, { c:2, r:0, color:'red' }, { c:1, r:1, color:'red' },
+          { c:3, r:0, color:'blue' }, { c:3, r:1, color:'blue' }, { c:3, r:2, color:'blue' }, { c:4, r:2, color:'blue' },
+          { c:1, r:3, color:'green' }, { c:2, r:3, color:'green' }, { c:0, r:4, color:'green' }, { c:1, r:4, color:'green' },
+          { c:3, r:3, color:'yellow' }, { c:4, r:3, color:'yellow' }, { c:5, r:3, color:'yellow' }, { c:4, r:4, color:'yellow' },
+          { c:2, r:5, color:'orange' }, { c:3, r:5, color:'orange' }, { c:4, r:5, color:'orange' }, { c:4, r:6, color:'orange' }
+        ]
+      }
+    ];
+
+    // 状态
+    const state = {
+      phase: 'playing', // 'playing', 'win', 'lose'
+      level: 0,
+      groupsLeft: 0,
+      grid: [],
+      slidingGroup: null,
+      slideOffsetY: 0,
+      shakeTime: 0
+    };
+
+    // 代理组属性，供 Debug 查看
+    Object.defineProperty(state, 'groups', {
+      get: () => {
+        const visited = new Set();
+        const res = [];
+        for(let r=0; r<ROWS; r++) {
+          for(let c=0; c<COLS; c++) {
+            const b = state.grid[r][c];
+            if (b && !visited.has(`${r},${c}`)) {
+              const group = [];
+              const queue = [b];
+              visited.add(`${r},${c}`);
+              while(queue.length > 0) {
+                const curr = queue.pop();
+                group.push(curr);
+                [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr, dc]) => {
+                  const nr = curr.r + dr, nc = curr.c + dc;
+                  if (nr>=0 && nr<ROWS && nc>=0 && nc<COLS) {
+                    const nb = state.grid[nr][nc];
+                    if (nb && nb.color === curr.color && !visited.has(`${nr},${nc}`)) {
+                      visited.add(`${nr},${nc}`);
+                      queue.push(nb);
+                    }
+                  }
+                });
+              }
+              res.push(group);
+            }
+          }
+        }
+        return res;
+      }
+    });
+
+    // 图片加载
+    const images = {};
+    function loadImages(callback) {
+      const list = Array.from(new Set([
+        ...Object.values(TILES),
+        ...Object.values(GROUP_IMAGES),
+        'bus_or_other',
+        'ui_icon6'
+      ]));
+      const total = list.length;
+      let loaded = 0;
+
+      list.forEach(name => {
+        const img = new Image();
+        img.onload = () => {
+          images[name] = img;
+          loaded++;
+          if (loaded >= total) callback();
+        };
+        img.onerror = () => {
+          console.warn('Failed to load image:', name);
+          loaded++;
+          if (loaded >= total) callback();
+        };
+        img.src = `assets_named/${name}.png`;
+      });
+    }
+
+    // 工具函数
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function getShape(blocks) {
+      const minR = Math.min(...blocks.map(b => b.r));
+      const minC = Math.min(...blocks.map(b => b.c));
+      return blocks.map(b => ({ c: b.c - minC, r: b.r - minR }));
+    }
+
+    function isSameShape(blocks, targetShape) {
+      if (blocks.length !== targetShape.length) return false;
+      const shape = getShape(blocks);
+      for (let i = 0; i < shape.length; i++) {
+        let found = false;
+        for (let j = 0; j < targetShape.length; j++) {
+          if (shape[i].c === targetShape[j].c && shape[i].r === targetShape[j].r) {
+            found = true; break;
+          }
+        }
+        if (!found) return false;
+      }
+      return true;
+    }
+
+    // 加载关卡
+    function loadLevel(index) {
+      const data = LEVELS[index];
+      state.level = index;
+      state.groupsLeft = data.groupsLeft;
+      state.phase = 'playing';
+      state.slidingGroup = null;
+      state.slideOffsetY = 0;
+      state.shakeTime = 0;
+
+      state.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      data.blocks.forEach(b => {
+        state.grid[b.r][b.c] = { c: b.c, r: b.r, color: b.color };
+      });
+    }
+
+    // 绘制组
+    function drawGroup(blocks, offsetY = 0) {
+      if (blocks.length === 0) return;
+      const color = blocks[0].color;
+      let groupImg = null;
+
+      if (color === 'red' && isSameShape(blocks, T_SHAPE)) groupImg = images[GROUP_IMAGES.T_red];
+      else if (color === 'blue' && isSameShape(blocks, L_SHAPE)) groupImg = images[GROUP_IMAGES.L_blue];
+      else if (color === 'green' && isSameShape(blocks, S_SHAPE)) groupImg = images[GROUP_IMAGES.S_green];
+
+      if (groupImg) {
+        const minC = Math.min(...blocks.map(b => b.c));
+        const maxC = Math.max(...blocks.map(b => b.c));
+        const minR = Math.min(...blocks.map(b => b.r));
+        const maxR = Math.max(...blocks.map(b => b.r));
+        
+        const x = BOARD_X + minC * CELL_W;
+        const y = BOARD_Y + minR * CELL_H - offsetY;
+        const w = (maxC - minC + 1) * CELL_W;
+        const h = (maxR - minR + 1) * CELL_H;
+        
+        ctx.drawImage(groupImg, x, y, w, h);
+      } else {
+        blocks.forEach(b => {
+          const x = BOARD_X + b.c * CELL_W;
+          const y = BOARD_Y + b.r * CELL_H - offsetY;
+          
+          ctx.fillStyle = BLOCK_COLORS[color];
+          ctx.fillRect(x, y, CELL_W, CELL_H);
+          
+          const tileImg = images[TILES[color]];
+          if (tileImg) {
+            ctx.drawImage(tileImg, x, y, CELL_W, CELL_H);
+          }
+        });
+      }
+    }
+
+    // 检查游戏是否无解
+    function checkGameOver() {
+      const groups = state.groups;
+      if (groups.length === 0) return;
+      
+      let hasValid = false;
+      for (let group of groups) {
+        let valid = true;
+        for (let b of group) {
+          for (let rr = b.r + 1; rr < ROWS; rr++) {
+            const below = state.grid[rr][b.c];
+            if (below !== null && !group.includes(below)) {  // hotfix: 排除组自身方块
+              valid = false;
+              break;
+            }
+          }
+          if (!valid) break;
+        }
+        if (valid) {
+          hasValid = true;
+          break;
+        }
+      }
+      
+      if (!hasValid) {
+        state.phase = 'lose';
+      }
+    }
+
+    // 更新逻辑
+    function update() {
+      if (state.phase !== 'playing') return;
+
+      if (state.shakeTime > 0) {
+        state.shakeTime--;
+      }
+
+      if (state.slidingGroup) {
+        state.slideOffsetY += 30;
+        
+        if (state.slideOffsetY > 1200) {
+          // 移除组
+          state.slidingGroup.forEach(b => {
+            state.grid[b.r][b.c] = null;
+          });
+          state.slidingGroup = null;
+          state.slideOffsetY = 0;
+          state.groupsLeft--;
+
+          // 重力下落
+          for (let c = 0; c < COLS; c++) {
+            for (let r = ROWS - 1; r >= 0; r--) {
+              if (state.grid[r][c] === null) {
+                for (let r2 = r - 1; r2 >= 0; r2--) {
+                  if (state.grid[r2][c] !== null) {
+                    state.grid[r][c] = state.grid[r2][c];
+                    state.grid[r][c].r = r;
+                    state.grid[r2][c] = null;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (state.groupsLeft <= 0) {
+            state.phase = 'win';
+          } else {
+            checkGameOver();
+          }
+        }
+      }
+    }
+
+    // 渲染
+    function render() {
+      // 背景层
+      ctx.fillStyle = '#e0f0ff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 棋盘层
+      ctx.fillStyle = '#5a6b8c';
+      roundRect(ctx, BOARD_X - 10, BOARD_Y - 10, BOARD_W + 20, BOARD_H + 20, 20);
+      ctx.fill();
+
+      // 网格
+      ctx.fillStyle = '#b0c4de';
+      for(let r = 0; r < ROWS; r++) {
+        for(let c = 0; c < COLS; c++) {
+          roundRect(ctx, BOARD_X + c * CELL_W + 2, BOARD_Y + r * CELL_H + 2, CELL_W - 4, CELL_H - 4, 10);
+          ctx.fill();
+        }
+      }
+
+      // 特效层 (抖动)
+      let offsetX = 0;
+      if (state.shakeTime > 0) {
+        offsetX = Math.sin(state.shakeTime * 2) * 5;
+      }
+
+      ctx.save();
+      ctx.translate(offsetX, 0);
+
+      // 实体层
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const b = state.grid[r][c];
+          if (b && (!state.slidingGroup || !state.slidingGroup.includes(b))) {
+            drawGroup([b], 0);
+          }
+        }
+      }
+
+      if (state.slidingGroup) {
+        drawGroup(state.slidingGroup, state.slideOffsetY);
+      }
+
+      ctx.restore();
+
+      // UI层
+      // 顶部信息
+      if (images.ui_icon3) {
+        ctx.drawImage(images.ui_icon3, 384 - 119, 10, 239, 108);
+      } else {
+        ctx.fillStyle = '#2a4b8c';
+        roundRect(ctx, 384 - 150, 20, 300, 80, 40);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 4;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 30px Arial';
+      ctx.fillText(`Level ${state.level + 1}`, 384, 60);
+      ctx.font = 'bold 24px Arial';
+      ctx.fillText(`Groups: ${state.groupsLeft}`, 384, 95);
+      ctx.shadowBlur = 0;
+
+      // 重置按钮
+      if (images.ui_icon6) {
+        ctx.drawImage(images.ui_icon6, 768 - 100, 20, 60, 60);
+      } else {
+        ctx.fillStyle = '#fff';
+        roundRect(ctx, 768 - 120, 20, 100, 60, 10);
+        ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText('Reset', 768 - 70, 58);
+      }
+
+      // 底部巴士
+      ctx.fillStyle = '#2a4b8c';
+      ctx.fillRect(0, 1200, 768, 176);
+      if (images.bus_or_other) {
+        ctx.drawImage(images.bus_or_other, 384 - 100, 1200 + 13, 200, 150);
+      }
+
+      // 弹窗层
+      if (state.phase === 'win') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, 768, 1376);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 60px Arial';
+        ctx.fillText('Level Clear!', 384, 600);
+        
+        ctx.font = 'bold 30px Arial';
+        ctx.fillText('Click to continue', 384, 680);
+      } else if (state.phase === 'lose') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, 768, 1376);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 60px Arial';
+        ctx.fillText('Game Over', 384, 600);
+        
+        ctx.font = 'bold 30px Arial';
+        ctx.fillText('Click to retry', 384, 680);
+      }
+    }
+
+    // 主循环
+    function loop() {
+      update();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    // 点击事件
+    canvas.addEventListener('click', e => {
+      if (state.phase === 'win') {
+        if (state.level < LEVELS.length - 1) {
+          loadLevel(state.level + 1);
+        } else {
+          loadLevel(0);
+        }
+        return;
+      }
+      if (state.phase === 'lose') {
+        loadLevel(state.level);
+        return;
+      }
+      if (state.slidingGroup) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+
+      // 重置按钮点击
+      if (mouseX > 768 - 120 && mouseX < 768 - 20 && mouseY > 20 && mouseY < 80) {
+        loadLevel(state.level);
+        return;
+      }
+
+      const c = Math.floor((mouseX - BOARD_X) / CELL_W);
+      const r = Math.floor((mouseY - BOARD_Y) / CELL_H);
+
+      if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+
+      const clickedBlock = state.grid[r][c];
+      if (!clickedBlock) return;
+
+      // 寻找连通组
+      const group = [];
+      const visited = new Set();
+      const queue = [clickedBlock];
+      visited.add(`${r},${c}`);
+
+      while (queue.length > 0) {
+        const b = queue.pop();
+        group.push(b);
+
+        const neighbors = [
+          [b.r - 1, b.c], [b.r + 1, b.c], [b.r, b.c - 1], [b.r, b.c + 1]
+        ];
+
+        for (let [nr, nc] of neighbors) {
+          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+            const nBlock = state.grid[nr][nc];
+            if (nBlock && nBlock.color === b.color && !visited.has(`${nr},${nc}`)) {
+              visited.add(`${nr},${nc}`);
+              queue.push(nBlock);
+            }
+          }
+        }
+      }
+
+      // 合法性检查
+      let valid = true;
+      for (let b of group) {
+        for (let rr = b.r + 1; rr < ROWS; rr++) {
+          const below = state.grid[rr][b.c];
+          if (below !== null && !group.includes(below)) {  // hotfix: 排除组自身方块
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) break;
+      }
+
+      if (valid) {
+        state.slidingGroup = group;
+        state.slideOffsetY = 0;
+      } else {
+        state.shakeTime = 15;
+      }
+    });
+
+    // Debug 钩子
+    window.__DBG = state;
+    window.__LOOP = loop;
+
+    // 启动
+    loadImages(() => {
+      loadLevel(0);
+      loop();
+    });
+  </script>
+</body>
+</html>
