@@ -1,0 +1,3408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ball Runner 2048 3D: Monster Island Blast</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --glass: rgba(11, 24, 46, 0.64);
+    --accent-green: #18dc60;
+    --accent-pink: #ff4fd8;
+    --accent-gold: #ffc82c;
+    --text-dark: #10233d;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #1b8fd9;
+    font-family: "Nunito", "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+    touch-action: none;
+  }
+  #app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  #gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+  #hudOverlayCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 6;
+  }
+  /* Top HUD */
+  .hud-top {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 12;
+  }
+  .hud-left, .hud-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    border: 1.5px solid rgba(255, 255, 255, 0.36);
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-weight: 800;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 6px 18px rgba(6, 22, 48, 0.28);
+    transition: transform 0.14s ease, background 0.14s ease;
+  }
+  button.pill { cursor: pointer; }
+  button.pill:hover {
+    transform: translateY(-1px) scale(1.03);
+    background: rgba(16, 36, 68, 0.85);
+  }
+  button.pill:active { transform: scale(0.96); }
+  .gem-pill {
+    background: linear-gradient(135deg, rgba(255, 56, 182, 0.9), rgba(142, 42, 235, 0.9));
+    border-color: rgba(255, 220, 250, 0.68);
+  }
+  .best-pill {
+    background: linear-gradient(135deg, rgba(255, 168, 0, 0.92), rgba(255, 88, 52, 0.92));
+    border-color: rgba(255, 245, 200, 0.72);
+  }
+  .diff-tag {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-weight: 900;
+    background: rgba(255,255,255,0.2);
+  }
+  .diff-hard { background: #ff3b4e; color: #fff; }
+  .diff-relief { background: #1ad968; color: #062b16; }
+  .diff-boss { background: #ffc425; color: #2b1700; }
+
+  /* Progress Track Bar */
+  .progress-wrap {
+    position: absolute;
+    top: 54px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(330px, 74vw);
+    height: 12px;
+    background: rgba(8, 26, 52, 0.48);
+    border: 1.5px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 11;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ffd426, #2be866, #21d4fd, #ff4fd8);
+    transition: width 0.06s linear;
+  }
+  .progress-boss-tag {
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 17px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  }
+  .mechanic-chip {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(11, 28, 54, 0.62);
+    backdrop-filter: blur(6px);
+    color: #e8f4ff;
+    font-size: 11.5px;
+    font-weight: 800;
+    padding: 3px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.28);
+    pointer-events: none;
+    z-index: 11;
+    white-space: nowrap;
+  }
+
+  /* Cannon Boss Phase Ammo & Multiplier HUD */
+  .cannon-hud {
+    position: absolute;
+    top: 64px;
+    right: 14px;
+    display: none;
+    flex-direction: column;
+    gap: 7px;
+    z-index: 12;
+    pointer-events: none;
+  }
+  .cannon-hud.active { display: flex; }
+  .cannon-badge {
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--text-dark);
+    font-weight: 900;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 2px solid #fff;
+  }
+
+  /* Pre-run Upgrade Dock */
+  .pre-run-dock {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(510px, 94vw);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 15;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  .pre-run-dock.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(24px);
+  }
+  .swipe-hint {
+    background: rgba(10, 26, 52, 0.78);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    padding: 7px 18px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 800;
+    border: 1.5px solid rgba(255, 255, 255, 0.48);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: pulseHint 1.5s infinite ease-in-out;
+    pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  }
+  @keyframes pulseHint {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  .upgrade-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .upg-btn {
+    background: linear-gradient(180deg, #ffffff 0%, #ebf4ff 100%);
+    border: 2.5px solid #ffffff;
+    border-radius: 16px;
+    padding: 9px 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    box-shadow: 0 8px 22px rgba(7, 28, 62, 0.32), inset 0 -3px 0 #cde0f5;
+    transition: transform 0.12s ease, filter 0.12s ease;
+  }
+  .upg-btn:hover { transform: translateY(-2px); }
+  .upg-btn:active { transform: translateY(1px) scale(0.97); }
+  .upg-btn.locked { opacity: 0.68; filter: grayscale(0.22); }
+  .upg-icon { font-size: 20px; line-height: 1; }
+  .upg-title { font-size: 12px; font-weight: 900; color: #163052; }
+  .upg-val { font-size: 13px; font-weight: 900; color: #0b84ff; }
+  .upg-cost {
+    margin-top: 2px;
+    background: linear-gradient(135deg, #ff42c8, #9d34f0);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+
+  /* Cannon Aim & Shoot Prompt */
+  .cannon-controls {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 15;
+  }
+  .cannon-controls.active { display: flex; }
+  .fire-btn {
+    background: linear-gradient(180deg, #2df06c 0%, #0fb847 100%);
+    color: #fff;
+    border: 3px solid #d5ffe3;
+    border-radius: 999px;
+    padding: 12px 34px;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(10, 140, 56, 0.55), inset 0 -4px 0 #0a8733;
+    transition: transform 0.1s ease;
+  }
+  .fire-btn:active { transform: scale(0.94); }
+  .aim-tip {
+    background: rgba(10, 26, 48, 0.8);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 5px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.35);
+    pointer-events: none;
+  }
+
+  /* Modals (Hat Shop & Level Select Map) */
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 18, 38, 0.62);
+    backdrop-filter: blur(7px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 30;
+    padding: 16px;
+  }
+  .modal-backdrop.active { display: flex; }
+  .modal-card {
+    background: linear-gradient(180deg, #ffffff 0%, #eef6ff 100%);
+    width: min(470px, 95vw);
+    max-height: 86vh;
+    overflow-y: auto;
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 24px 60px rgba(4, 18, 42, 0.52);
+    border: 3px solid #fff;
+    color: var(--text-dark);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .modal-title { font-size: 18px; font-weight: 900; }
+  .close-btn {
+    background: #e3eefc;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 16px;
+    font-weight: 900;
+    color: #234069;
+    cursor: pointer;
+  }
+  .hat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .hat-item {
+    background: #fff;
+    border: 2.5px solid #dbe8f8;
+    border-radius: 16px;
+    padding: 10px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .hat-item.equipped { border-color: #15c955; background: #edfff3; }
+  .hat-emoji { font-size: 28px; }
+  .hat-name { font-size: 12px; font-weight: 800; }
+  .hat-tag {
+    font-size: 11px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #eef4fc;
+    color: #365680;
+  }
+  .hat-item.equipped .hat-tag { background: #15c955; color: #fff; }
+
+  /* 10-Level Campaign Map Grid */
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 9px;
+  }
+  .lvl-card {
+    background: #ffffff;
+    border: 2.5px solid #d8e7fa;
+    border-radius: 16px;
+    padding: 10px 12px;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .lvl-card:hover { transform: translateY(-2px); border-color: #3ca0ff; }
+  .lvl-card.current { border-color: #0e8bff; background: #f0f8ff; box-shadow: 0 4px 14px rgba(14,139,255,0.18); }
+  .lvl-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .lvl-mech {
+    font-size: 11px;
+    font-weight: 700;
+    color: #46658c;
+  }
+  .lvl-badge {
+    font-size: 10px;
+    font-weight: 900;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: #e6f1ff;
+    color: #1659a8;
+  }
+  .lvl-badge.hard { background: #ffe2e5; color: #d41c38; }
+  .lvl-badge.breather { background: #dfffea; color: #0e8740; }
+  .lvl-badge.boss { background: #fff3cc; color: #9c6200; }
+
+  /* Result Banner */
+  .result-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(180deg, rgba(14, 32, 62, 0.95), rgba(8, 19, 40, 0.97));
+    color: #fff;
+    border: 2.5px solid rgba(255, 255, 255, 0.48);
+    border-radius: 26px;
+    padding: 22px 26px;
+    width: min(370px, 90vw);
+    text-align: center;
+    z-index: 25;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+  .result-banner.active { display: flex; }
+  .res-badge { font-size: 42px; line-height: 1; }
+  .res-title {
+    font-size: 23px;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ffe259, #ffa751);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .res-desc { font-size: 14px; color: #cfe4ff; line-height: 1.45; }
+  .res-action-btn {
+    background: linear-gradient(180deg, #2ef06e 0%, #10b848 100%);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 30px;
+    font-size: 16px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(20, 200, 80, 0.45);
+  }
+
+  .toast-banner {
+    position: absolute;
+    top: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 24, 48, 0.88);
+    color: #fff;
+    font-weight: 900;
+    font-size: 13.5px;
+    padding: 7px 18px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255,255,255,0.45);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 22;
+    white-space: nowrap;
+  }
+  .toast-banner.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(4px);
+  }
+
+  @media (max-width: 520px) {
+    .pill { padding: 5px 10px; font-size: 12px; }
+    .upg-title { font-size: 11px; }
+    .upg-val { font-size: 12px; }
+    .level-grid { grid-template-columns: 1fr; }
+  }
+</style>
+<link rel="icon" href="data:,"></head>
+<body>
+<div id="app">
+  <canvas id="gameCanvas"></canvas>
+  <canvas id="hudOverlayCanvas"></canvas>
+
+  <!-- Top HUD -->
+  <div class="hud-top">
+    <div class="hud-left">
+      <div class="pill" id="islandBadge">💀 Lv.1 · Sunny Skull Isle</div>
+      <button class="pill" id="levelOpenBtn" type="button">🗺️ Levels (1/10)</button>
+      <div class="pill best-pill" id="bestBadge">🏆 Best: 2</div>
+    </div>
+    <div class="hud-right">
+      <div class="pill gem-pill" id="gemBadge">💎 60</div>
+      <button class="pill" id="hatOpenBtn" type="button">🎩 Hats</button>
+      <button class="pill" id="muteBtn" type="button">🔊</button>
+    </div>
+  </div>
+
+  <!-- Track Progress Bar -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-fill" id="progressFill"></div>
+    <div class="progress-boss-tag" id="progressBossIcon">💀</div>
+  </div>
+  <div class="mechanic-chip" id="mechanicChip">✨ Lv.1 New: Chain Merge + Gates</div>
+
+  <!-- Cannon Boss Phase Top-Right Stats -->
+  <div class="cannon-hud" id="cannonHud">
+    <div class="cannon-badge" id="powerHudBadge">🥊 x1.0</div>
+    <div class="cannon-badge" id="ammoHudBadge">🚀 8</div>
+  </div>
+
+  <!-- Toast Banner -->
+  <div class="toast-banner" id="toastBanner"></div>
+
+  <!-- Pre-Run Upgrade & Instant Swipe Dock -->
+  <div class="pre-run-dock" id="preRunDock">
+    <div class="swipe-hint" id="swipeHint">👆 Drag Left/Right or Press A·D to Roll & Merge 2048!</div>
+    <div class="upgrade-grid">
+      <button class="upg-btn" id="upgStartBtn" type="button">
+        <span class="upg-icon">🏃</span>
+        <span class="upg-title" id="upgStartTitle">Start Ball</span>
+        <span class="upg-val" id="upgStartVal">2 → 4</span>
+        <span class="upg-cost" id="upgStartCost">💎 30</span>
+      </button>
+      <button class="upg-btn" id="upgPowerBtn" type="button">
+        <span class="upg-icon">💥</span>
+        <span class="upg-title" id="upgPowerTitle">Cannon Power</span>
+        <span class="upg-val" id="upgPowerVal">x1.0 → x1.4</span>
+        <span class="upg-cost" id="upgPowerCost">💎 35</span>
+      </button>
+      <button class="upg-btn" id="upgGemBtn" type="button">
+        <span class="upg-icon">🧲</span>
+        <span class="upg-title" id="upgGemTitle">Gem Magnet</span>
+        <span class="upg-val" id="upgGemVal">x1.0 → x1.3</span>
+        <span class="upg-cost" id="upgGemCost">💎 25</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Cannon Aim & Fire Controls -->
+  <div class="cannon-controls" id="cannonControls">
+    <div class="aim-tip" id="aimTip">🎯 Drag Scope between the Eyes (1.5x Crit) · Click / Space to Shoot!</div>
+    <button class="fire-btn" id="fireBtn" type="button">🔥 FIRE CANNON (SPACE)</button>
+  </div>
+
+  <!-- Hat Shop Modal -->
+  <div class="modal-backdrop" id="hatModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="hatModalTitle">🎩 3D 2048 Ball Hat Wardrobe</div>
+        <button class="close-btn" id="hatCloseBtn" type="button">✕</button>
+      </div>
+      <div class="hat-grid" id="hatGrid"></div>
+    </div>
+  </div>
+
+  <!-- 10-Level Campaign Select Modal -->
+  <div class="modal-backdrop" id="levelModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="levelModalTitle">🗺️ 10-Island Campaign Map</div>
+        <button class="close-btn" id="levelCloseBtn" type="button">✕</button>
+      </div>
+      <div class="level-grid" id="levelGrid"></div>
+    </div>
+  </div>
+
+  <!-- Result Banner -->
+  <div class="result-banner" id="resultBanner">
+    <div class="res-badge" id="resBadge">🏆</div>
+    <div class="res-title" id="resTitle">AWESOME! ISLAND CONQUERED!</div>
+    <div class="res-desc" id="resDesc">Your 2048 Rainbow Ball blasted the island monster!</div>
+    <button class="res-action-btn" id="resActionBtn" type="button">⚡ Next Island</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // =========================================================================
+  // 1. Color Palette, 5 Lush 3D Biomes & 10-Level Sawtooth Campaign Blueprint
+  // =========================================================================
+  const NUMBER_STYLES = {
+    2:    { fill: '#FFB81C', rim: '#C77E00', band: '#FFD56B' },
+    4:    { fill: '#FF7300', rim: '#BA4500', band: '#FFA352' },
+    8:    { fill: '#1EC91E', rim: '#0B7D10', band: '#6DF06D' },
+    16:   { fill: '#19B5FE', rim: '#0770B5', band: '#7CE8FF' },
+    32:   { fill: '#1864FF', rim: '#0736A8', band: '#70A5FF' },
+    64:   { fill: '#9D4EDD', rim: '#5B1A99', band: '#D29BFF' },
+    128:  { fill: '#FF4FC3', rim: '#B51783', band: '#FF9EE0' },
+    256:  { fill: '#FF5247', rim: '#B02017', band: '#FF9B94' },
+    512:  { fill: '#14DFC8', rim: '#078A7C', band: '#82FFF0' },
+    1024: { fill: '#98F019', rim: '#569900', band: '#D4FF7A' },
+    2048: { rainbow: true,   rim: '#6B2CF5' },
+    4096: { rainbow: true,   gold: true, rim: '#D48800' },
+    8192: { rainbow: true,   gold: true, rim: '#FF006E' }
+  };
+
+  const PIER_TIERS = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+  const BIOMES = [
+    { skyTop: '#1E90FF', skyBot: '#9BE8FF', fog: '#7ADFFF', sea: 0x159CE6, seaSpec: 0x8CEBFF, sand: 0xF5E6C4, rock: 0x8F9AA8 }, // 0: Tropical Lagoon
+    { skyTop: '#FF758C', skyBot: '#FFD194', fog: '#FFC2A8', sea: 0x4E54C8, seaSpec: 0xFFB8D1, sand: 0xFFE2BD, rock: 0x7A6888 }, // 1: Sunset Coral
+    { skyTop: '#4A00E0', skyBot: '#8E2DE2', fog: '#A76DFF', sea: 0x2B196E, seaSpec: 0xC471ED, sand: 0xD8C7FF, rock: 0x4E3F78 }, // 2: Neon Twilight
+    { skyTop: '#11998E', skyBot: '#A8FF78', fog: '#8CF5B8', sea: 0x0B7A75, seaSpec: 0x78FFD6, sand: 0xE8F0C0, rock: 0x526B68 }, // 3: Emerald Atoll
+    { skyTop: '#0F2027', skyBot: '#F7971E', fog: '#FFB75E', sea: 0x1D4350, seaSpec: 0xFFD200, sand: 0xF2D49B, rock: 0x4A4E59 }  // 4: Royal Aurora
+  ];
+
+  // 10 Handcrafted Levels following the 4-Level Sawtooth Curve:
+  // L1-L3 Escalation -> L4 HARD PEAK #1 -> L5 BREATHER + Sliding Floor Unlock -> L6 Sky Bombs -> L7 Compound -> L8 HARD PEAK #2 -> L9 Breather -> L10 BOSS FINALE
+  const CAMPAIGN_LEVELS = [
+    {
+      id: 1, biome: 0, bossKind: 'skeleton', icon: '💀', tag: 'normal',
+      enName: 'Sunny Skull Isle',
+      enMech: 'New: Chain Merge + Gates',
+      len: 1750, bossHp: 2300, bossSpd: 25
+    },
+    {
+      id: 2, biome: 0, bossKind: 'skeleton', icon: '🦴', tag: 'normal',
+      enName: 'Crystal Saw Bay',
+      enMech: 'New: Number Glass Wall + Magnet',
+      len: 1880, bossHp: 4500, bossSpd: 27
+    },
+    {
+      id: 3, biome: 1, bossKind: 'fish', icon: '🐟', tag: 'normal',
+      enName: 'Sunset Nitro Cove',
+      enMech: 'New: Floor Spikes + Nitro Strip',
+      len: 1980, bossHp: 12200, bossSpd: 30
+    },
+    {
+      id: 4, biome: 1, bossKind: 'fish', icon: '🦈', tag: 'hard',
+      enName: 'Buzzsaw Shark Peak',
+      enMech: '⚠️ HARD: Moving Gates + Patrol Saws',
+      len: 2100, bossHp: 22800, bossSpd: 35
+    },
+    {
+      id: 5, biome: 3, bossKind: 'slime', icon: '👑', tag: 'breather',
+      enName: 'Gliding Lagoon',
+      enMech: '🌿 Breather + New: Sliding Floors',
+      len: 1920, bossHp: 14000, bossSpd: 26
+    },
+    {
+      id: 6, biome: 3, bossKind: 'golem', icon: '🗿', tag: 'normal',
+      enName: 'Bombardment Reef',
+      enMech: 'New: Sky-Drop Bombs + Conveyors',
+      len: 2080, bossHp: 56000, bossSpd: 31
+    },
+    {
+      id: 7, biome: 2, bossKind: 'skeleton', icon: '👻', tag: 'normal',
+      enName: 'Twilight Crosswind',
+      enMech: 'Compound: Cross Conveyors + Barrels',
+      len: 2160, bossHp: 138000, bossSpd: 33
+    },
+    {
+      id: 8, biome: 2, bossKind: 'cyclops', icon: '🤖', tag: 'hard',
+      enName: 'Mecha Storm Fortress',
+      enMech: '⚠️ HARD: Twin Glass Walls + Bomb Rain',
+      len: 2260, bossHp: 310000, bossSpd: 36
+    },
+    {
+      id: 9, biome: 4, bossKind: 'slime', icon: '✨', tag: 'breather',
+      enName: 'Aurora Fever Runway',
+      enMech: '🌈 Fever Breather: Twin x4 + Gem River',
+      len: 1960, bossHp: 185000, bossSpd: 27
+    },
+    {
+      id: 10, biome: 4, bossKind: 'cyclops', icon: '🔱', tag: 'boss',
+      enName: '2048 Titan Throne',
+      enMech: '👑 FINALE: All Mechanics + Titan King',
+      len: 2360, bossHp: 820000, bossSpd: 38
+    }
+  ];
+
+  const HATS = [
+    { id: 'none',     emoji: '🎱', cost: 0,   en: 'Glossy Pro' },
+    { id: 'unclesam', emoji: '🎩', cost: 45,  en: 'Star Top Hat' },
+    { id: 'crown',    emoji: '👑', cost: 80,  en: 'Gold Crown' },
+    { id: 'viking',   emoji: '⚔️', cost: 120, en: 'Viking Helm' },
+    { id: 'halo',     emoji: '😇', cost: 160, en: 'Neon Halo' },
+    { id: 'cowboy',   emoji: '🤠', cost: 210, en: 'Cowboy Hat' }
+  ];
+
+  const I18N = { en: {
+      islandPrefix: 'Lv.',
+      islandSuffix: ' · ',
+      mapBtn: '🗺️ Levels',
+      bestPrefix: '🏆 Best: ',
+      hatBtn: '🎩 Hats',
+      swipeHint: '👆 Drag Left/Right or Press A·D to Roll 3D 2048 Balls!',
+      upgStart: 'Start Ball',
+      upgPower: 'Cannon Power',
+      upgGem: 'Gem Magnet',
+      maxed: 'MAX',
+      aimTip: '🎯 Drag Scope between Eyes (1.5x Crit) · Click / Space to Shoot!',
+      fireBtn: '🔥 FIRE CANNON (SPACE)',
+      hatTitle: '🎩 3D 2048 Ball Hat Wardrobe',
+      levelTitle: '🗺️ 10-Island Sawtooth Campaign',
+      equipped: 'Equipped',
+      owned: 'Equip',
+      headshot: '💥 HEADSHOT CRIT x1.5!',
+      awesome: 'AWESOME! ISLAND CONQUERED!',
+      autoNext: '⚡ Rolling seamlessly to next island...',
+      winDesc: 'Your {num} 3D Rainbow Ball blasted {boss}! Bonus 💎 +{bonus}!',
+      loseTitle: 'MONSTER REACHED CANNON!',
+      loseDesc: 'Boss had {hp} HP left! Upgrade Start Ball or Cannon Power and blast it!',
+      nextBtn: '⚡ Next Island',
+      retryBtn: '🔥 Retry Level Now',
+      needGems: '💎 Collect more 3D Pink Diamonds on track!',
+      glassBreak: '💎 3D GLASS WALL SHATTERED!',
+      skateBoost: '🔥 NITRO FLAME OVERDRIVE!',
+      magnetOn: '🧲 ORBITING MAGNETS ACTIVE!',
+      ddaBoost: '🛡️ Assist Active: Free 2x Start Ball this run!'
+    } };
+
+  // =========================================================================
+  // 2. WebAudio Synthesized Sound Engine
+  // =========================================================================
+  const SFX = {
+    ctx: null,
+    muted: false,
+    ensure() {
+      if (this.muted) return null;
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) this.ctx = new AC();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return this.ctx;
+    },
+    tone(freq, dur, type, vol, slideTo) {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(Math.max(40, freq), now);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(40, slideTo), now + dur);
+      gain.gain.setValueAtTime(vol || 0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + dur);
+    },
+    noise(dur, vol, filterFreq) {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.45));
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.value = filterFreq || 900;
+      const gain = ctx.createGain();
+      gain.gain.value = vol || 0.22;
+      src.connect(flt);
+      flt.connect(gain);
+      gain.connect(ctx.destination);
+      src.start();
+    },
+    merge(num) {
+      const tier = Math.min(13, Math.round(Math.log2(Math.max(2, num))));
+      const base = 270 * Math.pow(1.11, tier);
+      this.tone(base, 0.11, 'sine', 0.18, base * 1.42);
+      setTimeout(() => this.tone(base * 1.5, 0.09, 'triangle', 0.12, base * 1.8), 32);
+    },
+    gem(combo) {
+      const f = 900 + (combo % 10) * 75;
+      this.tone(f, 0.07, 'sine', 0.09, f * 1.18);
+    },
+    split() {
+      this.tone(300, 0.18, 'sawtooth', 0.15, 110);
+      this.noise(0.1, 0.14, 600);
+    },
+    shatter() {
+      this.noise(0.22, 0.28, 2500);
+      this.tone(1150, 0.12, 'triangle', 0.14, 1800);
+    },
+    bombBoom() {
+      this.noise(0.26, 0.26, 320);
+      this.tone(120, 0.22, 'sine', 0.2, 48);
+    },
+    pierStep(idx) {
+      const scale = [261.6, 293.7, 329.6, 349.2, 392.0, 440.0, 493.9, 523.3, 587.3, 659.3, 784.0, 1046.5];
+      const f = scale[Math.min(scale.length - 1, idx)];
+      this.tone(f, 0.12, 'triangle', 0.15, f * 1.06);
+    },
+    cannonFire() {
+      this.noise(0.32, 0.36, 240);
+      this.tone(135, 0.28, 'sawtooth', 0.24, 45);
+    },
+    bossHit(crit) {
+      this.noise(0.2, 0.28, crit ? 1450 : 520);
+      if (crit) {
+        this.tone(680, 0.14, 'triangle', 0.2, 1100);
+        setTimeout(() => this.tone(1040, 0.18, 'sine', 0.18, 1380), 50);
+      } else {
+        this.tone(210, 0.14, 'square', 0.14, 95);
+      }
+    },
+    fanfare() {
+      [523, 659, 784, 1046].forEach((f, i) => {
+        setTimeout(() => this.tone(f, 0.22, 'triangle', 0.16, f * 1.03), i * 80);
+      });
+    }
+  };
+
+  // =========================================================================
+  // 3. Persistent Save & Soft DDA State
+  // =========================================================================
+  const SAVE_KEY = 'ball_runner_2048_3d_v2';
+  const save = {
+    lang: 'en',
+    island: 1,
+    unlockedIsland: 10, // All 10 campaign islands browsable/playable via Level Map!
+    clearedIslands: {},
+    gems: 60,
+    bestNum: 2,
+    startLv: 0,
+    powerLv: 0,
+    gemLv: 0,
+    hat: 'none',
+    ownedHats: ['none'],
+    consecutiveLosses: 0
+  };
+
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      Object.assign(save, parsed);
+      save.lang = 'en';
+      if (!Array.isArray(save.ownedHats) || !save.ownedHats.length) save.ownedHats = ['none'];
+      if (!save.clearedIslands || typeof save.clearedIslands !== 'object') save.clearedIslands = {};
+    }
+  } catch (e) {}
+
+  function persist() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
+  }
+
+  function getStartNumber(withDDA) {
+    const dda = (withDDA && save.consecutiveLosses >= 2) ? 1 : 0;
+    return Math.pow(2, 1 + Math.min(7, save.startLv + dda));
+  }
+  function getPowerMult() {
+    const table = [1.0, 1.4, 1.8, 2.4, 3.2, 4.0, 5.0];
+    return table[Math.min(table.length - 1, save.powerLv)];
+  }
+  function getGemMult() {
+    const table = [1.0, 1.3, 1.6, 2.0, 2.5, 3.0];
+    return table[Math.min(table.length - 1, save.gemLv)];
+  }
+  function getStartCost() { return 30 + save.startLv * 35; }
+  function getPowerCost() { return 35 + save.powerLv * 40; }
+  function getGemCost()   { return 25 + save.gemLv * 30; }
+
+  function getLevelConfig(lvlNum) {
+    if (lvlNum <= CAMPAIGN_LEVELS.length) return CAMPAIGN_LEVELS[lvlNum - 1];
+    // Endless 11+ scaling cycling hard/compound patterns
+    const base = CAMPAIGN_LEVELS[(lvlNum - 1) % CAMPAIGN_LEVELS.length];
+    const extra = lvlNum - 10;
+    return {
+      id: lvlNum,
+      biome: (lvlNum - 1) % BIOMES.length,
+      bossKind: base.bossKind,
+      icon: base.icon,
+      tag: extra % 4 === 0 ? 'boss' : (extra % 2 === 0 ? 'hard' : 'normal'),
+      enName: `Endless Isle #${lvlNum}`,
+      enMech: '♾️ Master Tour: High-Intensity Mix',
+      len: 2250,
+      bossHp: Math.round(24000 * Math.pow(1.22, extra)),
+      bossSpd: Math.min(44, 35 + extra)
+    };
+  }
+
+  // =========================================================================
+  // 4. DOM Elements & UI Sync
+  // =========================================================================
+  const canvas = document.getElementById('gameCanvas');
+  const hudCanvas = document.getElementById('hudOverlayCanvas');
+  const hudCtx = hudCanvas.getContext('2d');
+
+  const els = {
+    islandBadge: document.getElementById('islandBadge'),
+    levelOpenBtn: document.getElementById('levelOpenBtn'),
+    bestBadge: document.getElementById('bestBadge'),
+    gemBadge: document.getElementById('gemBadge'),
+    hatOpenBtn: document.getElementById('hatOpenBtn'),
+    muteBtn: document.getElementById('muteBtn'),
+    progressWrap: document.getElementById('progressWrap'),
+    progressFill: document.getElementById('progressFill'),
+    progressBossIcon: document.getElementById('progressBossIcon'),
+    mechanicChip: document.getElementById('mechanicChip'),
+    cannonHud: document.getElementById('cannonHud'),
+    powerHudBadge: document.getElementById('powerHudBadge'),
+    ammoHudBadge: document.getElementById('ammoHudBadge'),
+    toastBanner: document.getElementById('toastBanner'),
+    preRunDock: document.getElementById('preRunDock'),
+    swipeHint: document.getElementById('swipeHint'),
+    upgStartBtn: document.getElementById('upgStartBtn'),
+    upgStartTitle: document.getElementById('upgStartTitle'),
+    upgStartVal: document.getElementById('upgStartVal'),
+    upgStartCost: document.getElementById('upgStartCost'),
+    upgPowerBtn: document.getElementById('upgPowerBtn'),
+    upgPowerTitle: document.getElementById('upgPowerTitle'),
+    upgPowerVal: document.getElementById('upgPowerVal'),
+    upgPowerCost: document.getElementById('upgPowerCost'),
+    upgGemBtn: document.getElementById('upgGemBtn'),
+    upgGemTitle: document.getElementById('upgGemTitle'),
+    upgGemVal: document.getElementById('upgGemVal'),
+    upgGemCost: document.getElementById('upgGemCost'),
+    cannonControls: document.getElementById('cannonControls'),
+    aimTip: document.getElementById('aimTip'),
+    fireBtn: document.getElementById('fireBtn'),
+    hatModal: document.getElementById('hatModal'),
+    hatModalTitle: document.getElementById('hatModalTitle'),
+    hatCloseBtn: document.getElementById('hatCloseBtn'),
+    hatGrid: document.getElementById('hatGrid'),
+    levelModal: document.getElementById('levelModal'),
+    levelModalTitle: document.getElementById('levelModalTitle'),
+    levelCloseBtn: document.getElementById('levelCloseBtn'),
+    levelGrid: document.getElementById('levelGrid'),
+    resultBanner: document.getElementById('resultBanner'),
+    resBadge: document.getElementById('resBadge'),
+    resTitle: document.getElementById('resTitle'),
+    resDesc: document.getElementById('resDesc'),
+    resActionBtn: document.getElementById('resActionBtn')
+  };
+
+  function t(key) { return I18N.en[key] || key; }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    els.toastBanner.textContent = msg;
+    els.toastBanner.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toastBanner.classList.remove('show'), 1650);
+  }
+
+  function syncUI() {
+    const cfg = getLevelConfig(save.island);
+    const nameStr = cfg.enName;
+    const mechStr = cfg.enMech;
+    els.islandBadge.textContent = `${cfg.icon} ${t('islandPrefix')}${save.island}${t('islandSuffix')}${nameStr}`;
+    els.levelOpenBtn.textContent = `${t('mapBtn')} (${save.island}/10)`;
+    els.bestBadge.textContent = `${t('bestPrefix')}${save.bestNum}`;
+    els.gemBadge.textContent = `💎 ${save.gems}`;
+    els.hatOpenBtn.textContent = t('hatBtn');
+    els.muteBtn.textContent = SFX.muted ? '🔇' : '🔊';
+    els.progressBossIcon.textContent = cfg.icon;
+    els.mechanicChip.textContent = `✨ Lv.${save.island} ${mechStr}`;
+    els.swipeHint.textContent = t('swipeHint');
+    els.aimTip.textContent = t('aimTip');
+    els.fireBtn.textContent = t('fireBtn');
+    els.hatModalTitle.textContent = t('hatTitle');
+    els.levelModalTitle.textContent = t('levelTitle');
+
+    const baseStart = getStartNumber(false);
+    els.upgStartTitle.textContent = t('upgStart');
+    if (save.startLv >= 6) {
+      els.upgStartVal.textContent = `${baseStart} (${t('maxed')})`;
+      els.upgStartCost.textContent = 'MAX';
+      els.upgStartBtn.classList.add('locked');
+    } else {
+      els.upgStartVal.textContent = `${baseStart} → ${baseStart * 2}`;
+      els.upgStartCost.textContent = `💎 ${getStartCost()}`;
+      els.upgStartBtn.classList.toggle('locked', save.gems < getStartCost());
+    }
+
+    els.upgPowerTitle.textContent = t('upgPower');
+    if (save.powerLv >= 6) {
+      els.upgPowerVal.textContent = `x${getPowerMult().toFixed(1)} (${t('maxed')})`;
+      els.upgPowerCost.textContent = 'MAX';
+      els.upgPowerBtn.classList.add('locked');
+    } else {
+      const nextP = [1.0, 1.4, 1.8, 2.4, 3.2, 4.0, 5.0][save.powerLv + 1];
+      els.upgPowerVal.textContent = `x${getPowerMult().toFixed(1)} → x${nextP.toFixed(1)}`;
+      els.upgPowerCost.textContent = `💎 ${getPowerCost()}`;
+      els.upgPowerBtn.classList.toggle('locked', save.gems < getPowerCost());
+    }
+
+    els.upgGemTitle.textContent = t('upgGem');
+    if (save.gemLv >= 5) {
+      els.upgGemVal.textContent = `x${getGemMult().toFixed(1)} (${t('maxed')})`;
+      els.upgGemCost.textContent = 'MAX';
+      els.upgGemBtn.classList.add('locked');
+    } else {
+      const nextG = [1.0, 1.3, 1.6, 2.0, 2.5, 3.0][save.gemLv + 1];
+      els.upgGemVal.textContent = `x${getGemMult().toFixed(1)} → x${nextG.toFixed(1)}`;
+      els.upgGemCost.textContent = `💎 ${getGemCost()}`;
+      els.upgGemBtn.classList.toggle('locked', save.gems < getGemCost());
+    }
+  }
+
+  function renderHatModal() {
+    els.hatGrid.innerHTML = '';
+    HATS.forEach((h) => {
+      const owned = save.ownedHats.includes(h.id);
+      const equipped = save.hat === h.id;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'hat-item' + (equipped ? ' equipped' : '');
+      const nameStr = h.en;
+      const tagStr = equipped ? t('equipped') : (owned ? t('owned') : `💎 ${h.cost}`);
+      btn.innerHTML = `<span class="hat-emoji">${h.emoji}</span><span class="hat-name">${nameStr}</span><span class="hat-tag">${tagStr}</span>`;
+      btn.addEventListener('click', () => {
+        SFX.ensure();
+        if (owned) {
+          save.hat = h.id;
+          SFX.merge(16);
+          persist();
+          rebuildPlayerHat3D();
+          renderHatModal();
+          syncUI();
+        } else if (save.gems >= h.cost) {
+          save.gems -= h.cost;
+          save.ownedHats.push(h.id);
+          save.hat = h.id;
+          SFX.fanfare();
+          persist();
+          rebuildPlayerHat3D();
+          renderHatModal();
+          syncUI();
+        } else {
+          SFX.split();
+          showToast(t('needGems'));
+        }
+      });
+      els.hatGrid.appendChild(btn);
+    });
+  }
+
+  function renderLevelModal() {
+    els.levelGrid.innerHTML = '';
+    CAMPAIGN_LEVELS.forEach((lv) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'lvl-card' + (save.island === lv.id ? ' current' : '');
+      const cleared = save.clearedIslands[lv.id];
+      const badgeLabel = lv.tag === 'hard' ? 'HARD PEAK' : (lv.tag === 'breather' ? 'FEVER BONUS' : (lv.tag === 'boss' ? 'FINAL BOSS' : `Lv.${lv.id}`));
+      const badgeCls = lv.tag === 'normal' ? '' : lv.tag;
+      const titleStr = lv.enName;
+      const mechStr = lv.enMech;
+      card.innerHTML = `
+        <div class="lvl-top">
+          <span>${lv.icon} ${lv.id}. ${titleStr} ${cleared ? '⭐' : ''}</span>
+          <span class="lvl-badge ${badgeCls}">${badgeLabel}</span>
+        </div>
+        <div class="lvl-mech">${mechStr}</div>
+      `;
+      card.addEventListener('click', () => {
+        SFX.ensure();
+        SFX.merge(32);
+        save.island = lv.id;
+        save.consecutiveLosses = 0;
+        persist();
+        els.levelModal.classList.remove('active');
+        buildIslandLevel(save.island);
+      });
+      els.levelGrid.appendChild(card);
+    });
+  }
+
+  // =========================================================================
+  // 5. Core Simulation State & Handcrafted 10-Level Blueprint Builder
+  // =========================================================================
+  const TRACK_HALF_W = 54;
+  let viewW = Math.max(280, window.innerWidth);
+  let viewH = Math.max(360, window.innerHeight);
+  let dpr = Math.min(2, window.devicePixelRatio || 1);
+
+  const state = {
+    phase: 'PRE_RUN', // PRE_RUN | RUNNING | PIER_CLIMB | CANNON_AIM | CELEBRATE | RESULT
+    elapsedSession: 0,
+    runTime: 0,
+    hitStop: 0,
+    shake: 0,
+    trackLen: 1850,
+    pierLen: 360,
+    cannonZ: 2245,
+    islandZ: 2650,
+    gemCombo: 0,
+    pierStepIdx: -1,
+    autoNextTimer: 0,
+    player: {
+      x: 0,
+      targetX: 0,
+      vx: 0,
+      y: 0,
+      z: 0,
+      num: 2,
+      scalePop: 1,
+      rollAngle: 0,
+      magnetTimer: 0,
+      skateTimer: 0,
+      invuln: 0,
+      inCannon: false
+    },
+    cannon: {
+      aimX: 0,
+      aimY: 0.58,
+      ammo: 8,
+      recoil: 0,
+      cooldown: 0,
+      shells: []
+    },
+    boss: {
+      x: 0,
+      z: 2650,
+      maxHp: 2400,
+      hp: 2400,
+      walkSpeed: 26,
+      bob: 0,
+      swayPhase: 0,
+      hitFlash: 0,
+      ragdoll: false,
+      ragVy: 0,
+      ragVz: 0,
+      ragRot: 0,
+      ragY: 0
+    },
+    entities: [],
+    clones: [],
+    particles: [],
+    popTexts: []
+  };
+
+  function addGemArc(ents, zStart, count, stepZ, ampX, freq, centerOffset) {
+    for (let i = 0; i < count; i++) {
+      ents.push({
+        kind: 'gem',
+        x: (centerOffset || 0) + Math.sin(i * (freq || 0.55)) * ampX,
+        y: 0,
+        z: zStart + i * stepZ,
+        taken: false
+      });
+    }
+  }
+
+  function addDualGates(ents, z, leftOp, leftVal, rightOp, rightVal, moving, range) {
+    if (moving) {
+      ents.push({
+        kind: 'gate',
+        x: 0, w: 46, z,
+        op: leftOp, val: leftVal,
+        label: (leftOp === 'mul' ? 'x' : '÷') + leftVal,
+        good: leftOp === 'mul',
+        moving: true, baseX: 0, range: range || 28,
+        taken: false
+      });
+    } else {
+      ents.push({
+        kind: 'gate',
+        x: -25, w: 46, z,
+        op: leftOp, val: leftVal,
+        label: (leftOp === 'mul' ? 'x' : '÷') + leftVal,
+        good: leftOp === 'mul',
+        moving: false, taken: false
+      });
+      ents.push({
+        kind: 'gate',
+        x: 25, w: 46, z,
+        op: rightOp, val: rightVal,
+        label: (rightOp === 'mul' ? 'x' : '÷') + rightVal,
+        good: rightOp === 'mul',
+        moving: false, taken: false
+      });
+    }
+  }
+
+  // Handcrafted 10-Level Generator matching Sawtooth Difficulty Curve
+  function populateCampaignEntities(lvl, startNum) {
+    const ents = [];
+    const cfg = getLevelConfig(lvl);
+    const len = cfg.len;
+    let cur = startNum;
+
+    // Every level opens within 120 units (<1.2s!) with a tactile Chain-Merge Ball Ladder!
+    const chainDir = (lvl % 2 === 0) ? -1 : 1;
+    for (let i = 0; i < 4; i++) {
+      ents.push({
+        kind: 'man',
+        x: -chainDir * 24 + chainDir * i * 15,
+        z: 120 + i * 42,
+        num: cur,
+        taken: false
+      });
+      cur *= 2; // cur is now startNum * 16 (e.g., 32)
+    }
+
+    const pattern = ((lvl - 1) % 10) + 1;
+
+    if (pattern === 1) {
+      // L1: Pure Joy Tutorial — zero saws/spikes, generous x2 & x4 gates + S-curve gems!
+      addDualGates(ents, 370, 'div', 2, 'mul', 2, false);
+      cur *= 2; // 64
+      addGemArc(ents, 450, 12, 16, 26, 0.5, 0);
+      ents.push({ kind: 'man', x: -18, z: 690, num: cur, taken: false });
+      ents.push({ kind: 'man', x: 20,  z: 690, num: cur / 2, taken: false });
+      cur *= 2; // 128
+      addDualGates(ents, 840, 'mul', 4, 'div', 2, false);
+      cur *= 4; // 512
+      addGemArc(ents, 940, 10, 18, 22, 0.6, 0);
+      ents.push({ kind: 'man', x: 16, z: 1180, num: cur, taken: false });
+      cur *= 2; // 1024
+      ents.push({ kind: 'boostPad', z: 1320, triggered: false });
+      addGemArc(ents, 1380, 10, 18, 18, 0.5, 0);
+      addDualGates(ents, len - 110, 'div', 2, 'mul', 2, false); // -> 2048!
+    } else if (pattern === 2) {
+      // L2: Introduces Numbered Blue Glass Wall + Magnet + Edge Saws
+      addDualGates(ents, 365, 'mul', 2, 'div', 2, false);
+      cur *= 2; // 64
+      ents.push({ kind: 'magnet', x: 0, z: 455, taken: false });
+      ents.push({ kind: 'saw', x: -34, z: 525, phase: 0, hit: false });
+      ents.push({ kind: 'saw', x: 34,  z: 595, phase: 1.5, hit: false });
+      addGemArc(ents, 485, 14, 14, 28, 0.55, 0);
+      ents.push({ kind: 'glassWall', x: 0, z: 760, num: 32, broken: false });
+      ents.push({ kind: 'man', x: -20, z: 850, num: cur, taken: false });
+      cur *= 2; // 128
+      addDualGates(ents, 990, 'div', 4, 'mul', 4, false);
+      cur *= 4; // 512
+      ents.push({ kind: 'glassWall', x: 0, z: 1180, num: 128, broken: false });
+      ents.push({ kind: 'man', x: 20, z: 1310, num: cur, taken: false });
+      cur *= 2; // 1024
+      ents.push({ kind: 'saw', x: 0, z: 1480, phase: 0.7, hit: false });
+      addGemArc(ents, 1540, 8, 18, 26, 0.7, 0);
+      addDualGates(ents, len - 105, 'mul', 2, 'div', 2, false);
+    } else if (pattern === 3) {
+      // L3: Introduces Popping Floor Spike Grates + Nitro Strip + Rolling Barrels
+      addDualGates(ents, 365, 'div', 2, 'mul', 2, false);
+      cur *= 2; // 64
+      ents.push({ kind: 'spikeGrate', x: -22, z: 490, timer: 0.2, hit: false });
+      ents.push({ kind: 'spikeGrate', x: 22,  z: 560, timer: 1.2, hit: false });
+      addGemArc(ents, 470, 10, 16, 24, 0.5, 0);
+      ents.push({ kind: 'man', x: 22, z: 700, num: cur, taken: false });
+      cur *= 2; // 128
+      addDualGates(ents, 845, 'mul', 4, 'div', 4, false);
+      cur *= 4; // 512
+      ents.push({ kind: 'glassWall', x: 0, z: 1020, num: 256, broken: false });
+      ents.push({ kind: 'boostPad', z: 1160, triggered: false });
+      ents.push({ kind: 'barrel', x: -24, z: 1320, rot: 0, hit: false });
+      ents.push({ kind: 'barrel', x: 24,  z: 1470, rot: 0, hit: false });
+      ents.push({ kind: 'spikeGrate', x: 0, z: 1610, timer: 0.6, hit: false });
+      ents.push({ kind: 'man', x: -22, z: 1720, num: cur, taken: false });
+      addDualGates(ents, len - 100, 'div', 2, 'mul', 2, false);
+    } else if (pattern === 4) {
+      // L4: ⚠️ HARD PEAK #1 — Moving Gates + Patrol Saws + Twin Glass Walls + Barrels
+      addDualGates(ents, 365, 'mul', 2, 'div', 2, true, 28);
+      cur *= 2; // 64
+      ents.push({ kind: 'saw', x: 0, z: 485, phase: 0, moving: true, baseX: 0, range: 30, hit: false });
+      ents.push({ kind: 'man', x: -24, z: 590, num: cur, taken: false });
+      ents.push({ kind: 'man', x: 24,  z: 590, num: cur / 2, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'glassWall', x: 0, z: 720, num: 128, broken: false });
+      ents.push({ kind: 'saw', x: -22, z: 830, phase: 1.1, moving: true, baseX: 0, range: 28, hit: false });
+      addDualGates(ents, 955, 'mul', 4, 'div', 4, true, 26);
+      cur *= 4; // 512
+      ents.push({ kind: 'spikeGrate', x: -22, z: 1090, timer: 0.0, hit: false });
+      ents.push({ kind: 'spikeGrate', x: 22,  z: 1090, timer: 1.05, hit: false });
+      ents.push({ kind: 'glassWall', x: 0, z: 1240, num: 512, broken: false });
+      ents.push({ kind: 'boostPad', z: 1365, triggered: false });
+      ents.push({ kind: 'barrel', x: -20, z: 1510, rot: 0, hit: false });
+      ents.push({ kind: 'barrel', x: 22,  z: 1640, rot: 0, hit: false });
+      ents.push({ kind: 'saw', x: 0, z: 1780, phase: 0.4, moving: true, baseX: 0, range: 26, hit: false });
+      ents.push({ kind: 'man', x: 24, z: 1890, num: cur, taken: false });
+      addDualGates(ents, len - 105, 'div', 4, 'mul', 2, false);
+    } else if (pattern === 5) {
+      // L5: 🌿 BREATHER + NEW MECHANIC: Sliding Conveyor Floors!
+      ents.push({ kind: 'magnet', x: 0, z: 340, taken: false });
+      // Sliding floor pushes ball smoothly from left (-28) -> right (+28) right into matching balls!
+      ents.push({ kind: 'conveyor', x: 0, z: 470, len: 150, dir: 1 });
+      ents.push({ kind: 'man', x: -18, z: 430, num: cur, taken: false });
+      cur *= 2; // 64
+      ents.push({ kind: 'man', x: 4,   z: 485, num: cur, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'man', x: 24,  z: 540, num: cur, taken: false });
+      cur *= 2; // 256
+      addGemArc(ents, 630, 16, 14, 30, 0.45, 0);
+      // Second conveyor pushing right -> left into x2 gate!
+      ents.push({ kind: 'conveyor', x: 0, z: 960, len: 140, dir: -1 });
+      addDualGates(ents, 1080, 'mul', 2, 'div', 2, false);
+      cur *= 2; // 512
+      ents.push({ kind: 'glassWall', x: 0, z: 1240, num: 256, broken: false });
+      ents.push({ kind: 'boostPad', z: 1380, triggered: false });
+      addGemArc(ents, 1430, 14, 16, 24, 0.55, 0);
+      addDualGates(ents, len - 110, 'div', 2, 'mul', 4, false); // Easy 2048/4096 climax!
+    } else if (pattern === 6) {
+      // L6: NEW HAZARD: Sky-Drop Bombs with Red Bullseye Rings + Conveyors!
+      addDualGates(ents, 360, 'mul', 2, 'div', 2, false);
+      cur *= 2; // 64
+      ents.push({ kind: 'skyBomb', x: -18, z: 520, dropAtZ: 280, exploded: false, hit: false });
+      ents.push({ kind: 'skyBomb', x: 20,  z: 640, dropAtZ: 390, exploded: false, hit: false });
+      ents.push({ kind: 'man', x: 22, z: 530, num: cur, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'conveyor', x: 0, z: 810, len: 130, dir: 1 });
+      ents.push({ kind: 'saw', x: 34, z: 865, phase: 0, hit: false }); // Conveyor pushes toward saw unless countered!
+      addDualGates(ents, 995, 'mul', 4, 'div', 2, false);
+      cur *= 4; // 512
+      ents.push({ kind: 'glassWall', x: 0, z: 1160, num: 256, broken: false });
+      ents.push({ kind: 'skyBomb', x: 0,   z: 1340, dropAtZ: 1080, exploded: false, hit: false });
+      ents.push({ kind: 'skyBomb', x: -22, z: 1490, dropAtZ: 1220, exploded: false, hit: false });
+      ents.push({ kind: 'man', x: 22, z: 1500, num: cur, taken: false });
+      cur *= 2; // 1024
+      addGemArc(ents, 1620, 10, 16, 25, 0.6, 0);
+      addDualGates(ents, len - 110, 'div', 2, 'mul', 2, false);
+    } else if (pattern === 7) {
+      // L7: Crosswind Conveyors + Barrels + Moving Gates
+      addDualGates(ents, 365, 'div', 2, 'mul', 2, false);
+      cur *= 2; // 64
+      ents.push({ kind: 'conveyor', x: 0, z: 520, len: 130, dir: -1 });
+      ents.push({ kind: 'man', x: -24, z: 575, num: cur, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'skyBomb', x: -20, z: 710, dropAtZ: 450, exploded: false, hit: false });
+      addDualGates(ents, 860, 'mul', 4, 'div', 4, true, 26);
+      cur *= 4; // 512
+      ents.push({ kind: 'conveyor', x: 0, z: 1050, len: 140, dir: 1 });
+      ents.push({ kind: 'spikeGrate', x: 24, z: 1105, timer: 0.4, hit: false });
+      ents.push({ kind: 'glassWall', x: 0, z: 1260, num: 512, broken: false });
+      ents.push({ kind: 'boostPad', z: 1390, triggered: false });
+      ents.push({ kind: 'barrel', x: -22, z: 1550, rot: 0, hit: false });
+      ents.push({ kind: 'barrel', x: 22,  z: 1690, rot: 0, hit: false });
+      ents.push({ kind: 'man', x: -20, z: 1830, num: cur, taken: false });
+      addDualGates(ents, len - 110, 'mul', 2, 'div', 4, false);
+    } else if (pattern === 8) {
+      // L8: ⚠️ HARD PEAK #2 — Mecha Storm Fortress (High-Intensity Compound Peak)
+      addDualGates(ents, 360, 'mul', 2, 'div', 4, true, 28);
+      cur *= 2; // 64
+      ents.push({ kind: 'skyBomb', x: 0, z: 495, dropAtZ: 240, exploded: false, hit: false });
+      ents.push({ kind: 'saw', x: 0, z: 615, phase: 0.5, moving: true, baseX: 0, range: 30, hit: false });
+      ents.push({ kind: 'man', x: 24, z: 720, num: cur, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'glassWall', x: 0, z: 850, num: 128, broken: false });
+      ents.push({ kind: 'conveyor', x: 0, z: 1010, len: 140, dir: -1 });
+      ents.push({ kind: 'saw', x: -34, z: 1055, phase: 0, hit: false });
+      addDualGates(ents, 1190, 'mul', 4, 'div', 4, true, 28);
+      cur *= 4; // 512
+      ents.push({ kind: 'skyBomb', x: -22, z: 1350, dropAtZ: 1080, exploded: false, hit: false });
+      ents.push({ kind: 'skyBomb', x: 22,  z: 1465, dropAtZ: 1190, exploded: false, hit: false });
+      ents.push({ kind: 'glassWall', x: 0, z: 1610, num: 512, broken: false });
+      ents.push({ kind: 'spikeGrate', x: -22, z: 1760, timer: 0.1, hit: false });
+      ents.push({ kind: 'spikeGrate', x: 22,  z: 1760, timer: 1.15, hit: false });
+      ents.push({ kind: 'man', x: -24, z: 1920, num: cur, taken: false });
+      addDualGates(ents, len - 115, 'div', 4, 'mul', 4, false);
+    } else if (pattern === 9) {
+      // L9: 🌈 PRE-FINALE BREATHER — Aurora Fever Gem & x4 Jackpot Runway!
+      ents.push({ kind: 'magnet', x: 0, z: 330, taken: false });
+      addDualGates(ents, 430, 'mul', 4, 'div', 2, false);
+      cur *= 4; // 128
+      addGemArc(ents, 510, 20, 14, 30, 0.5, 0);
+      ents.push({ kind: 'glassWall', x: 0, z: 840, num: 128, broken: false });
+      ents.push({ kind: 'conveyor', x: 0, z: 990, len: 130, dir: 1 });
+      ents.push({ kind: 'man', x: 22, z: 1045, num: cur, taken: false });
+      cur *= 2; // 256
+      addDualGates(ents, 1210, 'div', 2, 'mul', 4, false);
+      cur *= 4; // 1024
+      ents.push({ kind: 'boostPad', z: 1360, triggered: false });
+      addGemArc(ents, 1420, 16, 16, 24, 0.6, 0);
+      addDualGates(ents, len - 110, 'mul', 4, 'div', 2, false); // Huge 4096+ dopamine explosion!
+    } else {
+      // L10: 👑 BOSS FINALE PEAK — 2048 Titan Throne (Full Mechanic Symphony)
+      addDualGates(ents, 355, 'mul', 2, 'div', 4, true, 28);
+      cur *= 2; // 64
+      ents.push({ kind: 'conveyor', x: 0, z: 500, len: 130, dir: 1 });
+      ents.push({ kind: 'skyBomb', x: 20, z: 545, dropAtZ: 270, exploded: false, hit: false });
+      ents.push({ kind: 'man', x: -22, z: 650, num: cur, taken: false });
+      cur *= 2; // 128
+      ents.push({ kind: 'saw', x: 0, z: 775, phase: 0, moving: true, baseX: 0, range: 30, hit: false });
+      addDualGates(ents, 910, 'mul', 4, 'div', 4, true, 28);
+      cur *= 4; // 512
+      ents.push({ kind: 'glassWall', x: 0, z: 1060, num: 512, broken: false });
+      ents.push({ kind: 'magnet', x: 0, z: 1150, taken: false });
+      addGemArc(ents, 1190, 12, 14, 28, 0.65, 0);
+      ents.push({ kind: 'skyBomb', x: -22, z: 1410, dropAtZ: 1140, exploded: false, hit: false });
+      ents.push({ kind: 'skyBomb', x: 22,  z: 1520, dropAtZ: 1240, exploded: false, hit: false });
+      ents.push({ kind: 'boostPad', z: 1640, triggered: false });
+      ents.push({ kind: 'barrel', x: -22, z: 1790, rot: 0, hit: false });
+      ents.push({ kind: 'barrel', x: 22,  z: 1920, rot: 0, hit: false });
+      ents.push({ kind: 'glassWall', x: 0, z: 2050, num: 512, broken: false });
+      ents.push({ kind: 'man', x: 24, z: 2145, num: cur, taken: false });
+      addDualGates(ents, len - 105, 'div', 4, 'mul', 4, false);
+    }
+
+    return ents;
+  }
+
+  // =========================================================================
+  // 6. High-Definition Three.js r128 WebGL 3D Scene & Texture Generators
+  // =========================================================================
+  const hasWebGL = (function() {
+    if (typeof THREE === 'undefined') return false;
+    try {
+      const testC = document.createElement('canvas');
+      return !!(window.WebGLRenderingContext && (testC.getContext('webgl') || testC.getContext('experimental-webgl')));
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  const gfx = {
+    renderer: null,
+    scene: null,
+    mainCam: null,
+    scopeCam: null,
+    oceanMesh: null,
+    oceanGeo: null,
+    oceanBasePos: null,
+    skyDomeMat: null,
+    levelGroup: null,
+    dynamicGroup: null,
+    playerRoot: null,
+    playerSphere: null,
+    playerAura: null,
+    playerHatGroup: null,
+    playerMagnetGroup: null,
+    playerFlameRing: null,
+    bossRoot: null,
+    bossLimbs: null,
+    cannonGroup: null,
+    cannonBarrelPivot: null,
+    ballTexCache: {},
+    gateTexCache: {},
+    wallTexCache: {},
+    conveyorTex: null
+  };
+
+  function getBallTexture(num) {
+    const key = String(num);
+    if (gfx.ballTexCache[key]) return gfx.ballTexCache[key];
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 256;
+    const g = c.getContext('2d');
+    const st = NUMBER_STYLES[num] || NUMBER_STYLES[2048];
+
+    if (st.rainbow) {
+      const grad = g.createLinearGradient(0, 0, 512, 256);
+      grad.addColorStop(0.00, '#FF2E93');
+      grad.addColorStop(0.22, '#FFB800');
+      grad.addColorStop(0.45, '#19E65C');
+      grad.addColorStop(0.70, '#14C8FF');
+      grad.addColorStop(1.00, '#8C38FF');
+      g.fillStyle = grad;
+    } else {
+      const grad = g.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, st.band || st.fill);
+      grad.addColorStop(0.5, st.fill);
+      grad.addColorStop(1, st.rim);
+      g.fillStyle = grad;
+    }
+    g.fillRect(0, 0, 512, 256);
+
+    // Classic Billiard White Equatorial Band
+    g.fillStyle = 'rgba(255, 255, 255, 0.24)';
+    g.fillRect(0, 108, 512, 40);
+
+    // Crisp White Billiard Medallion Badges at all 4 cardinal longitudes (u = 0.0, 0.25, 0.5, 0.75) so number faces camera!
+    const label = String(num);
+    for (const cx of [0, 128, 256, 384, 512]) {
+      g.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      g.beginPath();
+      g.ellipse(cx, 128, 44, 56, 0, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 4.5;
+      g.strokeStyle = st.rim || '#4B21B3';
+      g.stroke();
+
+      const fSize = label.length >= 4 ? 32 : (label.length === 3 ? 40 : 50);
+      g.font = `900 ${fSize}px "Nunito", "Arial Black", sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = st.rainbow ? '#591CE6' : '#0F213A';
+      g.fillText(label, cx, 130);
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = 4;
+    gfx.ballTexCache[key] = tex;
+    return tex;
+  }
+
+  function getGateTexture(label, good, val) {
+    const key = `${label}_${good}_${val}`;
+    if (gfx.gateTexCache[key]) return gfx.gateTexCache[key];
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const g = c.getContext('2d');
+
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    if (good) {
+      grad.addColorStop(0, 'rgba(24, 235, 102, 0.92)');
+      grad.addColorStop(0.22, 'rgba(24, 220, 96, 0.56)');
+      grad.addColorStop(1, 'rgba(12, 175, 72, 0.68)');
+    } else {
+      grad.addColorStop(0, 'rgba(255, 62, 72, 0.94)');
+      grad.addColorStop(0.22, 'rgba(250, 62, 72, 0.58)');
+      grad.addColorStop(1, 'rgba(195, 28, 42, 0.72)');
+    }
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 256, 256);
+
+    // Top Solid Header Strip + Triangles
+    g.fillStyle = good ? '#12CE52' : '#EE313B';
+    g.fillRect(0, 0, 256, 48);
+
+    const tris = val >= 4 ? 2 : 1;
+    g.fillStyle = '#FFFFFF';
+    for (let i = 0; i < tris; i++) {
+      const tx = 128 + (i - (tris - 1) * 0.5) * 38;
+      g.beginPath();
+      if (good) {
+        g.moveTo(tx, 11); g.lineTo(tx - 13, 36); g.lineTo(tx + 13, 36);
+      } else {
+        g.moveTo(tx, 37); g.lineTo(tx - 13, 12); g.lineTo(tx + 13, 12);
+      }
+      g.closePath();
+      g.fill();
+    }
+
+    // Subtle holographic scanlines
+    g.fillStyle = 'rgba(255,255,255,0.10)';
+    for (let y = 56; y < 250; y += 18) g.fillRect(8, y, 240, 5);
+
+    // Crisp Arithmetic Label
+    g.font = '900 88px "Nunito", "Arial Black", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 12;
+    g.strokeStyle = 'rgba(10, 22, 40, 0.68)';
+    g.strokeText(label, 128, 152);
+    g.fillStyle = '#FFFFFF';
+    g.fillText(label, 128, 152);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    gfx.gateTexCache[key] = tex;
+    return tex;
+  }
+
+  function getGlassWallTexture(num) {
+    const key = String(num);
+    if (gfx.wallTexCache[key]) return gfx.wallTexCache[key];
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 256;
+    const g = c.getContext('2d');
+
+    const grad = g.createLinearGradient(0, 0, 512, 256);
+    grad.addColorStop(0, 'rgba(30, 165, 255, 0.76)');
+    grad.addColorStop(0.5, 'rgba(130, 228, 255, 0.62)');
+    grad.addColorStop(1, 'rgba(16, 118, 235, 0.78)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 512, 256);
+
+    // Crystal diagonal glare streaks
+    g.fillStyle = 'rgba(255,255,255,0.28)';
+    g.beginPath();
+    g.moveTo(70, 0); g.lineTo(135, 0); g.lineTo(55, 256); g.lineTo(0, 256);
+    g.closePath();
+    g.fill();
+
+    g.strokeStyle = 'rgba(225, 250, 255, 0.95)';
+    g.lineWidth = 10;
+    g.strokeRect(5, 5, 502, 246);
+
+    g.font = '900 108px "Nunito", "Arial Black", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 14;
+    g.strokeStyle = 'rgba(8, 26, 56, 0.8)';
+    g.strokeText(key, 256, 132);
+    g.fillStyle = '#FFFFFF';
+    g.fillText(key, 256, 132);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    gfx.wallTexCache[key] = tex;
+    return tex;
+  }
+
+  function getConveyorTexture() {
+    if (gfx.conveyorTex) return gfx.conveyorTex;
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#0E7CE8';
+    g.fillRect(0, 0, 256, 128);
+    g.fillStyle = '#5CE6FF';
+    for (let x = 16; x < 256; x += 64) {
+      g.beginPath();
+      g.moveTo(x, 22);
+      g.lineTo(x + 34, 64);
+      g.lineTo(x, 106);
+      g.lineTo(x + 18, 106);
+      g.lineTo(x + 52, 64);
+      g.lineTo(x + 18, 22);
+      g.closePath();
+      g.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 2);
+    gfx.conveyorTex = tex;
+    return tex;
+  }
+
+  const skyTexCache = {};
+  function getSkyTexture(bioIdx) {
+    if (skyTexCache[bioIdx]) return skyTexCache[bioIdx];
+    const bio = BIOMES[bioIdx % BIOMES.length];
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0.0, bio.skyTop);
+    grad.addColorStop(0.46, bio.skyBot);
+    grad.addColorStop(1.0, bio.skyBot);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 512, 512);
+
+    // Fluffy stylized horizon clouds
+    g.fillStyle = 'rgba(255, 255, 255, 0.52)';
+    for (const [cx, cy, r] of [[85, 165, 28], [210, 148, 34], [355, 162, 30], [455, 150, 26]]) {
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.arc(cx + r * 0.8, cy + 5, r * 0.72, 0, Math.PI * 2);
+      g.arc(cx - r * 0.75, cy + 6, r * 0.68, 0, Math.PI * 2);
+      g.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    skyTexCache[bioIdx] = tex;
+    return tex;
+  }
+
+  function initThreeEngine() {
+    if (!hasWebGL) return;
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true
+    });
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(viewW, viewH, false);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    gfx.renderer = renderer;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x7ADFFF, 0.00015);
+    gfx.scene = scene;
+
+    // Main Perspective Camera (Note: Looking toward +Z, so +X in world is RIGHT on screen when camera up is +Y and camera looks from -Z to +Z?
+    // Wait: In right-handed Three.js, if camera is at (0, 70, -110) looking at (0, 20, +100), forward = +Z, up = +Y => right = forward x up = (+Z) x (+Y) = -X!
+    // So we negate world X (`-wx`) in Three.js coordinates so `wx > 0` is ALWAYS screen-right! Super clean!)
+    const mainCam = new THREE.PerspectiveCamera(50, viewW / viewH, 4, 4200);
+    gfx.mainCam = mainCam;
+
+    const scopeCam = new THREE.PerspectiveCamera(20, 1, 10, 4200);
+    gfx.scopeCam = scopeCam;
+
+    // Lighting: Crisp Hemisphere + Sun Directional Light with Soft Shadows + Rim Light
+    const hemi = new THREE.HemisphereLight(0xFFFFFF, 0x2688D4, 0.78);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xFFF9EC, 0.92);
+    sun.position.set(-180, 340, -140);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 512;
+    sun.shadow.mapSize.height = 512;
+    sun.shadow.camera.near = 50;
+    sun.shadow.camera.far = 1600;
+    const d = 320;
+    sun.shadow.camera.left = -d;
+    sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d;
+    sun.shadow.camera.bottom = -d;
+    scene.add(sun);
+    scene.add(sun.target);
+    gfx.sun = sun;
+
+    // Animated Specular 3D Ocean
+    const oceanGeo = new THREE.PlaneGeometry(4600, 4800, 34, 34);
+    oceanGeo.rotateX(-Math.PI / 2);
+    const posAttr = oceanGeo.attributes.position;
+    const baseArr = new Float32Array(posAttr.array.length);
+    baseArr.set(posAttr.array);
+    gfx.oceanGeo = oceanGeo;
+    gfx.oceanBasePos = baseArr;
+
+    const oceanMat = new THREE.MeshPhongMaterial({
+      color: 0x159CE6,
+      specular: 0x99EEFF,
+      shininess: 95,
+      flatShading: true
+    });
+    const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+    oceanMesh.position.set(0, -14, 1400);
+    scene.add(oceanMesh);
+    gfx.oceanMesh = oceanMesh;
+
+    gfx.levelGroup = new THREE.Group();
+    gfx.dynamicGroup = new THREE.Group();
+    scene.add(gfx.levelGroup);
+    scene.add(gfx.dynamicGroup);
+
+    // Build Persistent Player 3D Ball Rig
+    const pRoot = new THREE.Group();
+    const sphereGeo = new THREE.SphereGeometry(12, 36, 28);
+    const sphereMat = new THREE.MeshStandardMaterial({
+      map: getBallTexture(2),
+      roughness: 0.14,
+      metalness: 0.08
+    });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    sphere.castShadow = true;
+    sphere.rotation.y = Math.PI * 0.5; // Face number medallion toward camera!
+    pRoot.add(sphere);
+
+    // Rainbow/Gold Halo Aura Ring for 2048+
+    const auraGeo = new THREE.RingGeometry(13.8, 17.2, 32);
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0xFFE44D, side: THREE.DoubleSide, transparent: true, opacity: 0.0 });
+    const aura = new THREE.Mesh(auraGeo, auraMat);
+    pRoot.add(aura);
+
+    // Nitro Flame Ring
+    const flameGeo = new THREE.TorusGeometry(13.2, 1.4, 10, 28);
+    flameGeo.rotateX(Math.PI * 0.5);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xFF5A1F, transparent: true, opacity: 0 });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    pRoot.add(flame);
+
+    // Orbiting Dual Magnets Group
+    const magGroup = new THREE.Group();
+    for (const side of [-1, 1]) {
+      const torus = new THREE.Mesh(
+        new THREE.TorusGeometry(4.2, 1.2, 8, 16, Math.PI),
+        new THREE.MeshStandardMaterial({ color: side < 0 ? 0xFF3333 : 0x1B88FF, roughness: 0.3 })
+      );
+      torus.position.set(side * 17.5, 0, 0);
+      torus.rotation.z = side * Math.PI * 0.5;
+      magGroup.add(torus);
+    }
+    magGroup.visible = false;
+    pRoot.add(magGroup);
+
+    const hatGroup = new THREE.Group();
+    pRoot.add(hatGroup);
+
+    scene.add(pRoot);
+    gfx.playerRoot = pRoot;
+    gfx.playerSphere = sphere;
+    gfx.playerAura = aura;
+    gfx.playerFlameRing = flame;
+    gfx.playerMagnetGroup = magGroup;
+    gfx.playerHatGroup = hatGroup;
+
+    rebuildPlayerHat3D();
+  }
+
+  function rebuildPlayerHat3D() {
+    if (!gfx.playerHatGroup) return;
+    const g = gfx.playerHatGroup;
+    while (g.children.length) g.remove(g.children[0]);
+    const h = save.hat;
+    if (h === 'none') return;
+
+    if (h === 'unclesam') {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(10.5, 10.5, 1.4, 24), new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3 }));
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 6.8, 10.5, 24), new THREE.MeshStandardMaterial({ color: 0xE62938, roughness: 0.3 }));
+      top.position.y = 5.6;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(7.05, 7.0, 2.8, 24), new THREE.MeshStandardMaterial({ color: 0x1A47B8, roughness: 0.3 }));
+      band.position.y = 2.0;
+      g.add(brim, top, band);
+    } else if (h === 'crown') {
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(8.2, 7.2, 4.5, 16), new THREE.MeshStandardMaterial({ color: 0xFFC814, metalness: 0.55, roughness: 0.2 }));
+      base.position.y = 2.2;
+      g.add(base);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(2.1, 4.5, 8), new THREE.MeshStandardMaterial({ color: 0xFFD93B, metalness: 0.6, roughness: 0.2 }));
+        spike.position.set(Math.cos(a) * 6.8, 6.2, Math.sin(a) * 6.8);
+        g.add(spike);
+      }
+    } else if (h === 'viking') {
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(8.2, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), new THREE.MeshStandardMaterial({ color: 0x9AA6B8, metalness: 0.65, roughness: 0.25 }));
+      g.add(dome);
+      for (const s of [-1, 1]) {
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(2.0, 9.5, 10), new THREE.MeshStandardMaterial({ color: 0xFFF5D6, roughness: 0.3 }));
+        horn.position.set(s * 9.5, 4.5, 0);
+        horn.rotation.z = -s * 0.75;
+        g.add(horn);
+      }
+    } else if (h === 'halo') {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(8.5, 1.25, 12, 28), new THREE.MeshBasicMaterial({ color: 0xFFF04D }));
+      ring.rotation.x = Math.PI * 0.5;
+      ring.position.y = 6.5;
+      g.add(ring);
+    } else if (h === 'cowboy') {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 1.1, 24), new THREE.MeshStandardMaterial({ color: 0x8F4F1E, roughness: 0.55 }));
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 7.6, 6.8, 20), new THREE.MeshStandardMaterial({ color: 0xA35C24, roughness: 0.5 }));
+      crown.position.y = 3.6;
+      g.add(brim, crown);
+    }
+  }
+
+  function create3DBossRig(bossKind) {
+    const root = new THREE.Group();
+    const bodyGroup = new THREE.Group();
+    root.add(bodyGroup);
+
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 });
+    const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111827 });
+    const browMat  = new THREE.MeshStandardMaterial({ color: 0x18202C, roughness: 0.4 });
+
+    let mainMat;
+    if (bossKind === 'skeleton') {
+      mainMat = new THREE.MeshStandardMaterial({ color: 0xE2E9F2, roughness: 0.32 });
+      const ribDark = new THREE.MeshStandardMaterial({ color: 0x5A6577, roughness: 0.5 });
+      // Pelvis & Spine
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(20, 16, 42, 16), mainMat);
+      torso.position.y = 56;
+      torso.castShadow = true;
+      bodyGroup.add(torso);
+      for (let r = 0; r < 3; r++) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(19.5 - r * 1.2, 2.3, 8, 20), ribDark);
+        rib.rotation.x = Math.PI * 0.5;
+        rib.position.y = 46 + r * 10;
+        bodyGroup.add(rib);
+      }
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(24, 24, 20), mainMat);
+      skull.position.y = 95;
+      skull.castShadow = true;
+      bodyGroup.add(skull);
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(22, 10, 20), mainMat);
+      jaw.position.set(0, 76, -6);
+      bodyGroup.add(jaw);
+    } else if (bossKind === 'fish') {
+      mainMat = new THREE.MeshStandardMaterial({ color: 0x8F9BB3, roughness: 0.25, metalness: 0.15 });
+      const finMat = new THREE.MeshStandardMaterial({ color: 0x9D38FF, roughness: 0.25, emissive: 0x330866 });
+      const body = new THREE.Mesh(new THREE.SphereGeometry(28, 24, 20), mainMat);
+      body.scale.set(0.95, 1.65, 0.92);
+      body.position.y = 74;
+      body.castShadow = true;
+      bodyGroup.add(body);
+      const crest = new THREE.Mesh(new THREE.ConeGeometry(12, 28, 8), finMat);
+      crest.position.y = 124;
+      bodyGroup.add(crest);
+    } else if (bossKind === 'slime') {
+      mainMat = new THREE.MeshStandardMaterial({ color: 0xFFC914, roughness: 0.16, metalness: 0.12 });
+      const b1 = new THREE.Mesh(new THREE.SphereGeometry(32, 24, 18), mainMat);
+      b1.scale.set(1.1, 0.82, 1.0);
+      b1.position.y = 56;
+      const b2 = new THREE.Mesh(new THREE.SphereGeometry(24, 24, 18), mainMat);
+      b2.scale.set(1.05, 0.85, 1.0);
+      b2.position.y = 84;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(14, 26, 16), mainMat);
+      tip.position.y = 112;
+      tip.rotation.z = -0.22;
+      bodyGroup.add(b1, b2, tip);
+    } else if (bossKind === 'golem') {
+      mainMat = new THREE.MeshStandardMaterial({ color: 0x6E655F, roughness: 0.72 });
+      const lavaMat = new THREE.MeshBasicMaterial({ color: 0xFF5511 });
+      const chest = new THREE.Mesh(new THREE.DodecahedronGeometry(28, 1), mainMat);
+      chest.position.y = 66;
+      chest.castShadow = true;
+      const core = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 12), lavaMat);
+      core.position.set(0, 66, -20);
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(20, 1), mainMat);
+      head.position.y = 100;
+      bodyGroup.add(chest, core, head);
+    } else {
+      // Mecha Cyclops / Titan
+      mainMat = new THREE.MeshStandardMaterial({ color: 0x3A4C6B, metalness: 0.62, roughness: 0.26 });
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xFFC824, metalness: 0.7, roughness: 0.2 });
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(50, 46, 34), mainMat);
+      chest.position.y = 64;
+      chest.castShadow = true;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(40, 34, 34), mainMat);
+      head.position.y = 102;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(18, 15, 12, 8), goldMat);
+      crown.position.y = 124;
+      bodyGroup.add(chest, head, crown);
+    }
+
+    // Legs & Swinging Arms
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 5.5, 42, 12), mainMat);
+    legL.position.set(13, 21, 0);
+    const legR = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 5.5, 42, 12), mainMat);
+    legR.position.set(-13, 21, 0);
+
+    const armL = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 4.8, 38, 12), mainMat);
+    armL.position.set(30, 68, 0);
+    armL.rotation.z = -0.5;
+    const armR = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 4.8, 38, 12), mainMat);
+    armR.position.set(-30, 68, 0);
+    armR.rotation.z = 0.5;
+    bodyGroup.add(legL, legR, armL, armR);
+
+    // Big Googly 3D Eyes facing -Z (toward player & cannon!) at Y = 94 (Weak-Spot Center!)
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(8.5, 18, 16), whiteMat);
+      eye.position.set(s * 10.5, 94, -20);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(4.3, 14, 12), pupilMat);
+      pupil.position.set(s * 10.5, 94, -27.2);
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(15, 3.4, 4), browMat);
+      brow.position.set(s * 11, 104, -22);
+      brow.rotation.z = s * 0.32;
+      bodyGroup.add(eye, pupil, brow);
+    }
+
+    // Glowing Red Weak-Spot Gem right between the eyes so players see the crit point in 3D!
+    const critGem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(4.2, 0),
+      new THREE.MeshBasicMaterial({ color: 0xFF2E4C })
+    );
+    critGem.position.set(0, 94, -23);
+    bodyGroup.add(critGem);
+
+    gfx.bossLimbs = { legL, legR, armL, armR, mainMat, baseColor: mainMat.color.getHex(), critGem };
+    return root;
+  }
+
+  function rebuildThreeLevelScene() {
+    if (!hasWebGL || !gfx.scene) return;
+    const cfg = getLevelConfig(save.island);
+    const bio = BIOMES[cfg.biome % BIOMES.length];
+
+    // Update WebGL Sky Background + Fog + Ocean Biome Palette
+    document.body.style.background = `linear-gradient(180deg, ${bio.skyTop} 0%, ${bio.skyBot} 55%, ${bio.skyTop} 100%)`;
+    gfx.scene.background = getSkyTexture(cfg.biome);
+    gfx.scene.fog.color.set(bio.fog);
+    gfx.oceanMesh.material.color.setHex(bio.sea);
+    gfx.oceanMesh.material.specular.setHex(bio.seaSpec);
+
+    // Clear previous static level meshes & dynamic meshes
+    while (gfx.levelGroup.children.length) gfx.levelGroup.remove(gfx.levelGroup.children[0]);
+    while (gfx.dynamicGroup.children.length) gfx.dynamicGroup.remove(gfx.dynamicGroup.children[0]);
+
+    const lg = gfx.levelGroup;
+    const trackW = TRACK_HALF_W * 2;
+
+    // 1. Sleek Glossy White 3D Marble Runway Slab
+    const deckGeo = new THREE.BoxGeometry(trackW, 12, state.trackLen + 30);
+    const deckMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.22, metalness: 0.04 });
+    const deck = new THREE.Mesh(deckGeo, deckMat);
+    deck.position.set(0, -6, (state.trackLen - 10) * 0.5);
+    deck.receiveShadow = true;
+    lg.add(deck);
+
+    // Raised 3D Marble-Chute Side Guardrails + Glowing Cyan Neon Trim
+    const railGeo = new THREE.BoxGeometry(4.2, 6.5, state.trackLen + 30);
+    const railMat = new THREE.MeshStandardMaterial({ color: 0xD6EEFF, roughness: 0.25, metalness: 0.15 });
+    const neonGeo = new THREE.BoxGeometry(1.5, 1.4, state.trackLen + 30);
+    const neonMat = new THREE.MeshBasicMaterial({ color: 0x26C6FF });
+    for (const side of [-1, 1]) {
+      const rMesh = new THREE.Mesh(railGeo, railMat);
+      rMesh.position.set(side * (TRACK_HALF_W + 1.5), 2.5, (state.trackLen - 10) * 0.5);
+      rMesh.receiveShadow = true;
+      lg.add(rMesh);
+
+      const nMesh = new THREE.Mesh(neonGeo, neonMat);
+      nMesh.position.set(side * (TRACK_HALF_W - 0.3), 5.9, (state.trackLen - 10) * 0.5);
+      lg.add(nMesh);
+    }
+
+    // Checkered Finish Strip + Overhead Archway
+    const checkCanvas = document.createElement('canvas');
+    checkCanvas.width = 256; checkCanvas.height = 64;
+    const cg = checkCanvas.getContext('2d');
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < 8; c++) {
+        cg.fillStyle = (r + c) % 2 === 0 ? '#111927' : '#FFFFFF';
+        cg.fillRect(c * 32, r * 32, 32, 32);
+      }
+    }
+    const checkTex = new THREE.CanvasTexture(checkCanvas);
+    const checkPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(trackW, 20),
+      new THREE.MeshBasicMaterial({ map: checkTex })
+    );
+    checkPlane.rotation.x = -Math.PI * 0.5;
+    checkPlane.position.set(0, 0.15, state.trackLen + 8);
+    lg.add(checkPlane);
+
+    // 2. Rainbow 2..4096 3D Tier Step Pier
+    const stepLen = state.pierLen / PIER_TIERS.length;
+    PIER_TIERS.forEach((tierNum, i) => {
+      const st = NUMBER_STYLES[tierNum];
+      const colHex = st && !st.rainbow ? st.fill : (tierNum === 2048 ? '#FF4FD8' : '#FFD426');
+      const tile = new THREE.Mesh(
+        new THREE.BoxGeometry(trackW * 1.12, 10, stepLen - 1.2),
+        new THREE.MeshStandardMaterial({ color: colHex, roughness: 0.25 })
+      );
+      tile.position.set(0, -4.8 + i * 0.35, state.trackLen + 20 + (i + 0.5) * stepLen);
+      tile.receiveShadow = true;
+      lg.add(tile);
+    });
+
+    // Cannon Pier Platform
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(52, 58, 14, 24),
+      new THREE.MeshStandardMaterial({ color: 0xF0F6FC, roughness: 0.3 })
+    );
+    pad.position.set(0, -4, state.cannonZ + 4);
+    pad.receiveShadow = true;
+    lg.add(pad);
+
+    // 3. 3D Naval Cannon Rig
+    const cannonGroup = new THREE.Group();
+    cannonGroup.position.set(0, 3, state.cannonZ);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x424C5E, metalness: 0.5, roughness: 0.35 });
+    for (const s of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 5, 18), wheelMat);
+      w.rotation.z = Math.PI * 0.5;
+      w.position.set(s * 17, 9, 0);
+      w.castShadow = true;
+      cannonGroup.add(w);
+    }
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 14, 0);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x9BA8BA, metalness: 0.72, roughness: 0.22 });
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(9.5, 13.5, 44, 24), barrelMat);
+    barrel.rotation.x = Math.PI * 0.42;
+    barrel.position.set(0, 4, 14);
+    barrel.castShadow = true;
+    const muzzleRing = new THREE.Mesh(
+      new THREE.TorusGeometry(10.2, 1.8, 10, 24),
+      new THREE.MeshStandardMaterial({ color: 0xFFC82C, metalness: 0.75, roughness: 0.2 })
+    );
+    muzzleRing.position.set(0, 8, 34);
+    pivot.add(barrel, muzzleRing);
+    cannonGroup.add(pivot);
+    lg.add(cannonGroup);
+    gfx.cannonGroup = cannonGroup;
+    gfx.cannonBarrelPivot = pivot;
+
+    // 4. Distant 3D Tropical Monster Island + Rocks + Palm Trees!
+    const islGroup = new THREE.Group();
+    islGroup.position.set(0, -10, state.islandZ + 45);
+    const sandIsland = new THREE.Mesh(
+      new THREE.CylinderGeometry(185, 225, 18, 28),
+      new THREE.MeshStandardMaterial({ color: bio.sand, roughness: 0.75 })
+    );
+    sandIsland.receiveShadow = true;
+    islGroup.add(sandIsland);
+
+    // White shoreline foam ring
+    const foam = new THREE.Mesh(
+      new THREE.RingGeometry(218, 244, 32),
+      new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })
+    );
+    foam.rotation.x = -Math.PI * 0.5;
+    foam.position.y = -3.2;
+    islGroup.add(foam);
+
+    // 3D Low-Poly Rocks & Palm Trees flanking Boss Island
+    const rockMat = new THREE.MeshStandardMaterial({ color: bio.rock, roughness: 0.8, flatShading: true });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.7 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x22C55E, roughness: 0.45, flatShading: true });
+    for (const s of [-1, 1]) {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(38, 0), rockMat);
+      rock.position.set(s * 135, 22, 18);
+      rock.scale.set(1.2, 1.35, 0.95);
+      islGroup.add(rock);
+
+      const palmX = s * 92;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 5.2, 46, 8), trunkMat);
+      trunk.position.set(palmX, 28, -15);
+      trunk.rotation.z = -s * 0.16;
+      islGroup.add(trunk);
+      for (let f = 0; f < 5; f++) {
+        const frond = new THREE.Mesh(new THREE.ConeGeometry(8, 26, 5), leafMat);
+        const ang = (f / 5) * Math.PI * 2;
+        frond.position.set(palmX - s * 4 + Math.cos(ang) * 10, 50, -15 + Math.sin(ang) * 10);
+        frond.rotation.z = Math.cos(ang) * 1.1;
+        frond.rotation.x = Math.sin(ang) * 1.1;
+        islGroup.add(frond);
+      }
+    }
+    lg.add(islGroup);
+
+    // 5. Boss 3D Rig
+    gfx.bossRoot = create3DBossRig(cfg.bossKind);
+    lg.add(gfx.bossRoot);
+
+    // 6. Create 3D Meshes for every Entity on the Track!
+    const gemGeo = new THREE.OctahedronGeometry(6.8, 0);
+    const gemMat = new THREE.MeshStandardMaterial({ color: 0xFF42D8, emissive: 0x550844, roughness: 0.12, metalness: 0.25 });
+    const postGeo = new THREE.CylinderGeometry(1.8, 1.8, 50, 12);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.25 });
+
+    for (const ent of state.entities) {
+      if (ent.kind === 'man') {
+        const tier = Math.max(1, Math.log2(Math.max(2, ent.num)));
+        const r = 11.2 * (1 + (tier - 1) * 0.065);
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(r, 28, 22),
+          new THREE.MeshStandardMaterial({ map: getBallTexture(ent.num), roughness: 0.16, metalness: 0.06 })
+        );
+        m.castShadow = true;
+        m.rotation.y = Math.PI * 0.5;
+        ent.r3d = r;
+        ent.mesh = m;
+        lg.add(m);
+      } else if (ent.kind === 'gate') {
+        const g = new THREE.Group();
+        const panel = new THREE.Mesh(
+          new THREE.PlaneGeometry(ent.w, 48),
+          new THREE.MeshBasicMaterial({ map: getGateTexture(ent.label, ent.good, ent.val), transparent: true, side: THREE.DoubleSide })
+        );
+        panel.rotation.y = Math.PI;
+        panel.position.y = 24;
+        const pL = new THREE.Mesh(postGeo, postMat);
+        pL.position.set(-ent.w * 0.5, 25, 0);
+        pL.castShadow = true;
+        const pR = new THREE.Mesh(postGeo, postMat);
+        pR.position.set(ent.w * 0.5, 25, 0);
+        pR.castShadow = true;
+        g.add(panel, pL, pR);
+        ent.mesh = g;
+        lg.add(g);
+      } else if (ent.kind === 'glassWall') {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(TRACK_HALF_W * 1.94, 52, 4.5),
+          new THREE.MeshStandardMaterial({
+            map: getGlassWallTexture(ent.num),
+            transparent: true,
+            opacity: 0.88,
+            roughness: 0.08,
+            metalness: 0.2
+          })
+        );
+        wall.rotation.y = Math.PI;
+        wall.position.set(0, 26, ent.z);
+        wall.castShadow = true;
+        ent.mesh = wall;
+        lg.add(wall);
+      } else if (ent.kind === 'gem') {
+        const gm = new THREE.Mesh(gemGeo, gemMat);
+        gm.castShadow = true;
+        ent.mesh = gm;
+        lg.add(gm);
+      } else if (ent.kind === 'magnet') {
+        const mg = new THREE.Group();
+        const arch = new THREE.Mesh(
+          new THREE.TorusGeometry(8, 2.5, 10, 20, Math.PI),
+          new THREE.MeshStandardMaterial({ color: 0xFF3338, roughness: 0.25 })
+        );
+        mg.add(arch);
+        ent.mesh = mg;
+        lg.add(mg);
+      } else if (ent.kind === 'saw') {
+        const sg = new THREE.Group();
+        const slot = new THREE.Mesh(
+          new THREE.BoxGeometry(32, 1.4, 7),
+          new THREE.MeshStandardMaterial({ color: 0x222938 })
+        );
+        const disc = new THREE.Group();
+        const core = new THREE.Mesh(
+          new THREE.CylinderGeometry(14, 14, 2.2, 20),
+          new THREE.MeshStandardMaterial({ color: 0xFF661A, metalness: 0.55, roughness: 0.25 })
+        );
+        core.rotation.x = Math.PI * 0.5;
+        disc.add(core);
+        for (let tIdx = 0; tIdx < 10; tIdx++) {
+          const a = (tIdx / 10) * Math.PI * 2;
+          const tooth = new THREE.Mesh(
+            new THREE.ConeGeometry(3.2, 6, 4),
+            new THREE.MeshStandardMaterial({ color: 0xFFE8D6, metalness: 0.7, roughness: 0.2 })
+          );
+          tooth.position.set(Math.cos(a) * 15, Math.sin(a) * 15, 0);
+          tooth.rotation.z = a - Math.PI * 0.5;
+          disc.add(tooth);
+        }
+        sg.add(slot, disc);
+        ent.disc = disc;
+        ent.mesh = sg;
+        lg.add(sg);
+      } else if (ent.kind === 'barrel') {
+        const bg = new THREE.Mesh(
+          new THREE.CylinderGeometry(9.5, 9.5, 20, 16),
+          new THREE.MeshStandardMaterial({ color: 0x8F5325, roughness: 0.65 })
+        );
+        bg.rotation.z = Math.PI * 0.5;
+        bg.castShadow = true;
+        ent.mesh = bg;
+        lg.add(bg);
+      } else if (ent.kind === 'spikeGrate') {
+        const gg = new THREE.Group();
+        const plate = new THREE.Mesh(
+          new THREE.BoxGeometry(30, 1.2, 22),
+          new THREE.MeshStandardMaterial({ color: 0x556070, metalness: 0.5, roughness: 0.4 })
+        );
+        plate.position.y = 0.4;
+        const spikes = new THREE.Group();
+        const spMat = new THREE.MeshStandardMaterial({ color: 0xE2ECF7, metalness: 0.75, roughness: 0.2 });
+        for (const sx of [-9, 0, 9]) {
+          for (const sz of [-5, 5]) {
+            const c = new THREE.Mesh(new THREE.ConeGeometry(2.6, 14, 8), spMat);
+            c.position.set(sx, 7, sz);
+            spikes.add(c);
+          }
+        }
+        gg.add(plate, spikes);
+        gg.position.set(-ent.x, 0, ent.z);
+        ent.plateMat = plate.material;
+        ent.spikes = spikes;
+        ent.mesh = gg;
+        lg.add(gg);
+      } else if (ent.kind === 'boostPad') {
+        const bp = new THREE.Mesh(
+          new THREE.BoxGeometry(TRACK_HALF_W * 1.96, 0.8, 20),
+          new THREE.MeshBasicMaterial({ color: 0xFF3D2E })
+        );
+        bp.position.set(0, 0.35, ent.z);
+        lg.add(bp);
+      } else if (ent.kind === 'conveyor') {
+        const belt = new THREE.Mesh(
+          new THREE.BoxGeometry(TRACK_HALF_W * 1.92, 0.7, ent.len),
+          new THREE.MeshBasicMaterial({ map: getConveyorTexture() })
+        );
+        // Rotate texture direction so arrows point toward ent.dir (+X right on screen = -X in Three.js!)
+        belt.rotation.y = ent.dir > 0 ? Math.PI : 0;
+        belt.position.set(0, 0.32, ent.z);
+        ent.mesh = belt;
+        lg.add(belt);
+      } else if (ent.kind === 'skyBomb') {
+        const bg = new THREE.Group();
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(11, 16, 24),
+          new THREE.MeshBasicMaterial({ color: 0xFF2938, side: THREE.DoubleSide, transparent: true, opacity: 0.82 })
+        );
+        ring.rotation.x = -Math.PI * 0.5;
+        ring.position.set(-ent.x, 0.45, ent.z);
+        lg.add(ring);
+
+        const bombSphere = new THREE.Mesh(
+          new THREE.SphereGeometry(10.5, 20, 16),
+          new THREE.MeshStandardMaterial({ color: 0x1E2430, metalness: 0.55, roughness: 0.28 })
+        );
+        bombSphere.castShadow = true;
+        const fuse = new THREE.Mesh(
+          new THREE.SphereGeometry(3.2, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0xFF9F1C })
+        );
+        fuse.position.y = 11.5;
+        bg.add(bombSphere, fuse);
+        bg.position.set(-ent.x, 140, ent.z);
+        bg.visible = false;
+        lg.add(bg);
+        ent.ring = ring;
+        ent.mesh = bg;
+      }
+    }
+  }
+
+  // =========================================================================
+  // 7. Build Level & Reset State
+  // =========================================================================
+  function buildIslandLevel(islandNum) {
+    const cfg = getLevelConfig(islandNum);
+    const startNum = getStartNumber(true);
+    const usedDDA = save.consecutiveLosses >= 2;
+
+    state.phase = 'PRE_RUN';
+    state.runTime = 0;
+    state.hitStop = 0;
+    state.shake = 0;
+    state.gemCombo = 0;
+    state.pierStepIdx = -1;
+    state.autoNextTimer = 0;
+
+    state.trackLen = cfg.len;
+    state.pierLen = 360;
+    state.cannonZ = cfg.len + state.pierLen + 35;
+    state.islandZ = state.cannonZ + 410;
+
+    const p = state.player;
+    p.x = 0;
+    p.targetX = 0;
+    p.vx = 0;
+    p.y = 0;
+    p.z = 0;
+    p.num = startNum;
+    p.scalePop = 1;
+    p.rollAngle = 0;
+    p.magnetTimer = 0;
+    p.skateTimer = 0;
+    p.invuln = 0;
+    p.inCannon = false;
+
+    state.cannon.shells = [];
+    state.cannon.aimX = 0;
+    state.cannon.aimY = 0.62;
+    state.cannon.ammo = 8;
+    state.cannon.recoil = 0;
+    state.cannon.cooldown = 0;
+
+    // Scale Boss HP cleanly relative to campaign curve & player start tier
+    const hpVal = cfg.bossHp;
+    state.boss = {
+      x: 0,
+      z: state.islandZ,
+      maxHp: hpVal,
+      hp: hpVal,
+      walkSpeed: cfg.bossSpd,
+      bob: 0,
+      swayPhase: 0,
+      hitFlash: 0,
+      ragdoll: false,
+      ragVy: 0,
+      ragVz: 0,
+      ragRot: 0,
+      ragY: 0
+    };
+
+    state.entities = populateCampaignEntities(islandNum, startNum);
+    state.clones = [];
+    state.particles = [];
+    state.popTexts = [];
+
+    if (hasWebGL) {
+      gfx.playerSphere.material.map = getBallTexture(p.num);
+      gfx.playerSphere.material.needsUpdate = true;
+      rebuildThreeLevelScene();
+    }
+
+    els.preRunDock.classList.remove('hidden');
+    els.cannonControls.classList.remove('active');
+    els.cannonHud.classList.remove('active');
+    els.resultBanner.classList.remove('active');
+    els.progressWrap.style.display = 'block';
+    els.mechanicChip.style.display = 'block';
+    els.progressFill.style.width = '0%';
+    syncUI();
+
+    if (usedDDA) showToast(t('ddaBoost'));
+  }
+
+  // =========================================================================
+  // 8. 3D Particles, Shatter Shards, Grey Clones & Pop Texts
+  // =========================================================================
+  function spawnBurst3D(wx, wy, wz, colorHex, count, speed, isShard) {
+    const n = count || 14;
+    const sp = speed || 85;
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const rad = (0.3 + Math.random() * 0.8) * sp;
+      let mesh = null;
+      if (hasWebGL && gfx.dynamicGroup) {
+        const geo = isShard
+          ? new THREE.ConeGeometry(4.5 + Math.random() * 4, 8, 3)
+          : new THREE.SphereGeometry(2.6 + Math.random() * 2.2, 8, 8);
+        const mat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.18,
+          transparent: isShard,
+          opacity: isShard ? 0.82 : 1.0
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        gfx.dynamicGroup.add(mesh);
+      }
+      state.particles.push({
+        x: wx, y: wy, z: wz,
+        vx: Math.cos(ang) * rad,
+        vy: 35 + Math.random() * sp,
+        vz: Math.sin(ang) * rad * 0.7,
+        rot: Math.random() * 6.28,
+        vrot: (Math.random() - 0.5) * 12,
+        life: 0.55 + Math.random() * 0.35,
+        maxLife: 0.9,
+        mesh
+      });
+    }
+  }
+
+  function addPopText(text, x, y, z, color, scale) {
+    state.popTexts.push({
+      text, x, y, z,
+      vy: 36,
+      color: color || '#FFFFFF',
+      scale: scale || 1,
+      life: 0.95,
+      maxLife: 0.95
+    });
+  }
+
+  function spawnGreySplitBall(lostNum) {
+    const dir = state.player.x >= 0 ? -1 : 1;
+    let mesh = null;
+    if (hasWebGL && gfx.dynamicGroup) {
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(10.5, 20, 16),
+        new THREE.MeshStandardMaterial({ color: 0x9AA5B4, roughness: 0.45 })
+      );
+      gfx.dynamicGroup.add(mesh);
+    }
+    state.clones.push({
+      x: state.player.x + dir * 8,
+      y: 12,
+      z: state.player.z,
+      vx: dir * (52 + Math.random() * 24),
+      vy: 66,
+      vz: 38,
+      rot: 0,
+      vrot: dir * 7,
+      num: lostNum,
+      life: 1.1,
+      mesh
+    });
+  }
+
+  function upgradePlayerNumber(newNum, labelText) {
+    const capped = Math.min(65536, Math.max(2, Math.round(newNum)));
+    state.player.num = capped;
+    state.player.scalePop = 1.42;
+    if (hasWebGL && gfx.playerSphere) {
+      gfx.playerSphere.material.map = getBallTexture(capped);
+      gfx.playerSphere.material.needsUpdate = true;
+    }
+    if (capped > save.bestNum) {
+      save.bestNum = capped;
+      persist();
+      syncUI();
+    }
+    SFX.merge(capped);
+    const st = NUMBER_STYLES[capped] || NUMBER_STYLES[2048];
+    const col = st.rainbow ? 0xFF4FD8 : st.fill;
+    spawnBurst3D(state.player.x, 14, state.player.z, col, 14, 90, false);
+    addPopText(labelText || `${capped}!`, state.player.x, 34, state.player.z, '#FFF58C', 1.22);
+  }
+
+  function splitPlayerNumber(divisor) {
+    if (state.player.invuln > 0) return;
+    state.player.invuln = 0.45;
+    const prev = state.player.num;
+    const next = Math.max(2, Math.floor(prev / divisor));
+    const lost = Math.max(2, prev - next);
+    state.player.num = next;
+    state.player.scalePop = 0.78;
+    state.shake = 0.24;
+    if (hasWebGL && gfx.playerSphere) {
+      gfx.playerSphere.material.map = getBallTexture(next);
+      gfx.playerSphere.material.needsUpdate = true;
+    }
+    SFX.split();
+    spawnGreySplitBall(lost);
+    spawnBurst3D(state.player.x, 14, state.player.z, 0xFF4747, 10, 75, false);
+    addPopText(`÷${divisor}`, state.player.x, 32, state.player.z, '#FF6B6B', 1.15);
+  }
+
+  // =========================================================================
+  // 9. Cannon Firing & Boss Weak-Spot Crit Logic
+  // =========================================================================
+  function updateCannonHud() {
+    els.powerHudBadge.textContent = `🥊 x${getPowerMult().toFixed(1)}`;
+    els.ammoHudBadge.textContent = `🚀 ${state.cannon.ammo}`;
+  }
+
+  function fireCannonShell() {
+    if (state.phase !== 'CANNON_AIM') return;
+    const c = state.cannon;
+    if (c.cooldown > 0 || c.ammo <= 0 || state.boss.ragdoll) return;
+
+    SFX.cannonFire();
+    c.ammo -= 1;
+    c.cooldown = 0.26;
+    c.recoil = 1.0;
+    state.shake = 0.2;
+
+    const b = state.boss;
+    const targetX = c.aimX * 68;
+    const targetY = Math.max(10, c.aimY * 138);
+
+    let mesh = null;
+    if (hasWebGL && gfx.dynamicGroup) {
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(10.5, 24, 18),
+        new THREE.MeshStandardMaterial({ map: getBallTexture(state.player.num), roughness: 0.14 })
+      );
+      gfx.dynamicGroup.add(mesh);
+    }
+
+    c.shells.push({
+      x: 0, y: 20, z: state.cannonZ + 18,
+      tx: targetX, ty: targetY, tz: b.z,
+      progress: 0,
+      num: state.player.num,
+      mesh
+    });
+    updateCannonHud();
+  }
+
+  function resolveShellImpact(sh) {
+    if (sh.mesh && gfx.dynamicGroup) gfx.dynamicGroup.remove(sh.mesh);
+    const b = state.boss;
+    if (b.ragdoll) return;
+
+    const dx = sh.tx - b.x;
+    const headY = 94; // Exact Y of Boss 3D Googly Eyes & Weak-Spot Gem!
+    const dyHead = sh.ty - headY;
+
+    const hitBody = Math.abs(dx) < 35 && sh.ty >= 6 && sh.ty <= 126;
+    const isHeadshot = Math.abs(dx) < 20 && Math.abs(dyHead) < 21;
+
+    if (hitBody) {
+      const critMult = isHeadshot ? 1.5 : 1.0;
+      const dmg = Math.round(sh.num * getPowerMult() * critMult);
+      b.hp = Math.max(0, b.hp - dmg);
+      b.hitFlash = 1.0;
+      b.z = Math.min(state.islandZ + 40, b.z + (isHeadshot ? 26 : 14));
+      state.hitStop = isHeadshot ? 0.045 : 0.02;
+      state.shake = isHeadshot ? 0.38 : 0.2;
+
+      SFX.bossHit(isHeadshot);
+      spawnBurst3D(sh.tx, sh.ty, b.z - 12, isHeadshot ? 0xFFE033 : 0xFF6242, isHeadshot ? 24 : 14, 130, true);
+      addPopText(`-${dmg}`, sh.tx, sh.ty + 18, b.z - 15, isHeadshot ? '#FF3B30' : '#FFFFFF', isHeadshot ? 1.48 : 1.16);
+      if (isHeadshot) addPopText(t('headshot'), sh.tx, sh.ty + 40, b.z - 15, '#FFE44D', 1.12);
+
+      if (b.hp <= 0) triggerBossVictory();
+    } else {
+      SFX.split();
+      spawnBurst3D(sh.tx, 4, sh.tz, 0x99EBFF, 12, 80, false);
+    }
+
+    if (b.hp > 0 && state.cannon.ammo <= 0 && state.cannon.shells.length <= 1) {
+      setTimeout(() => {
+        if (state.phase === 'CANNON_AIM' && state.boss.hp > 0 && !state.boss.ragdoll) {
+          triggerBossDefeat();
+        }
+      }, 420);
+    }
+  }
+
+  function triggerBossVictory() {
+    const b = state.boss;
+    b.ragdoll = true;
+    b.ragVy = 145;
+    b.ragVz = 210;
+    b.ragRot = 0;
+    b.ragY = 0;
+    state.phase = 'CELEBRATE';
+    els.cannonControls.classList.remove('active');
+    els.cannonHud.classList.remove('active');
+
+    save.clearedIslands[save.island] = true;
+    save.consecutiveLosses = 0;
+
+    const bonusGems = Math.round((30 + save.island * 14) * getGemMult());
+    save.gems += bonusGems;
+    SFX.fanfare();
+    spawnBurst3D(0, 60, b.z - 30, 0xFFD426, 28, 150, false);
+    addPopText('AWESOME!', 0, 96, b.z - 35, '#FFE24A', 1.65);
+
+    const cfg = getLevelConfig(save.island);
+    const bossName = cfg.enName;
+
+    // Seamless auto-advance on Levels 1-3 (<60s window) to honor retention law!
+    if (state.elapsedSession < 65 && save.island <= 3) {
+      showToast(`${t('awesome')} 💎 +${bonusGems} · ${t('autoNext')}`);
+      save.island += 1;
+      persist();
+      syncUI();
+      state.autoNextTimer = 1.35;
+    } else {
+      const nextId = save.island + 1;
+      save.island = nextId;
+      persist();
+      syncUI();
+      setTimeout(() => {
+        els.resBadge.textContent = '🏆';
+        els.resTitle.textContent = t('awesome');
+        els.resDesc.textContent = t('winDesc')
+          .replace('{num}', String(state.player.num))
+          .replace('{boss}', bossName)
+          .replace('{bonus}', String(bonusGems));
+        els.resActionBtn.textContent = `${t('nextBtn')} (Lv.${nextId})`;
+        els.resultBanner.classList.add('active');
+      }, 900);
+    }
+  }
+
+  function triggerBossDefeat() {
+    state.phase = 'RESULT';
+    save.consecutiveLosses += 1;
+    els.cannonControls.classList.remove('active');
+    els.cannonHud.classList.remove('active');
+    SFX.split();
+    save.gems += 20;
+    persist();
+    syncUI();
+
+    els.resBadge.textContent = '💥';
+    els.resTitle.textContent = t('loseTitle');
+    els.resDesc.textContent = t('loseDesc').replace('{hp}', String(state.boss.hp));
+    els.resActionBtn.textContent = t('retryBtn');
+    els.resultBanner.classList.add('active');
+  }
+
+  // =========================================================================
+  // 10. Input & Button Handlers
+  // =========================================================================
+  const keys = { left: false, right: false };
+  let pointerDown = false;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  function startRunningIfReady() {
+    if (state.phase === 'PRE_RUN' &&
+        !els.hatModal.classList.contains('active') &&
+        !els.levelModal.classList.contains('active')) {
+      SFX.ensure();
+      state.phase = 'RUNNING';
+      els.preRunDock.classList.add('hidden');
+    }
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    SFX.ensure();
+    pointerDown = true;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    if (state.phase === 'PRE_RUN') startRunningIfReady();
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    const dx = e.clientX - lastPointerX;
+    if (state.phase === 'PRE_RUN' && pointerDown && Math.abs(dx) > 3) {
+      startRunningIfReady();
+    }
+    if (state.phase === 'RUNNING' && pointerDown) {
+      const sens = (TRACK_HALF_W * 2.35) / Math.max(260, Math.min(viewW, 520));
+      state.player.targetX = Math.max(-TRACK_HALF_W + 9, Math.min(TRACK_HALF_W - 9, state.player.targetX + dx * sens));
+    } else if (state.phase === 'CANNON_AIM') {
+      if (pointerDown || e.pointerType === 'mouse') {
+        const normX = ((e.clientX / Math.max(1, viewW)) - 0.5) * 2.2;
+        const normY = 1.0 - (e.clientY / Math.max(1, viewH));
+        state.cannon.aimX = Math.max(-0.95, Math.min(0.95, normX));
+        state.cannon.aimY = Math.max(0.14, Math.min(0.95, (normY - 0.16) * 1.42));
+      }
+    }
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+  });
+
+  window.addEventListener('pointerup', (e) => {
+    if (pointerDown && state.phase === 'CANNON_AIM' && e.target === canvas) {
+      fireCannonShell();
+    }
+    pointerDown = false;
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      keys.left = true; startRunningIfReady();
+    } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      keys.right = true; startRunningIfReady();
+    } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      if (state.phase === 'CANNON_AIM') state.cannon.aimY = Math.min(0.95, state.cannon.aimY + 0.06);
+    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+      if (state.phase === 'CANNON_AIM') state.cannon.aimY = Math.max(0.14, state.cannon.aimY - 0.06);
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      SFX.ensure();
+      if (state.phase === 'PRE_RUN') startRunningIfReady();
+      else if (state.phase === 'CANNON_AIM') fireCannonShell();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+  });
+
+  els.upgStartBtn.addEventListener('click', () => {
+    SFX.ensure();
+    const cost = getStartCost();
+    if (save.startLv >= 6) return;
+    if (save.gems >= cost) {
+      save.gems -= cost;
+      save.startLv += 1;
+      persist();
+      buildIslandLevel(save.island);
+      upgradePlayerNumber(getStartNumber(true), `START ${getStartNumber(true)}!`);
+    } else { SFX.split(); showToast(t('needGems')); }
+  });
+
+  els.upgPowerBtn.addEventListener('click', () => {
+    SFX.ensure();
+    const cost = getPowerCost();
+    if (save.powerLv >= 6) return;
+    if (save.gems >= cost) {
+      save.gems -= cost;
+      save.powerLv += 1;
+      SFX.merge(64);
+      persist();
+      syncUI();
+      addPopText(`🥊 x${getPowerMult().toFixed(1)}!`, 0, 36, state.player.z, '#FFE033', 1.25);
+    } else { SFX.split(); showToast(t('needGems')); }
+  });
+
+  els.upgGemBtn.addEventListener('click', () => {
+    SFX.ensure();
+    const cost = getGemCost();
+    if (save.gemLv >= 5) return;
+    if (save.gems >= cost) {
+      save.gems -= cost;
+      save.gemLv += 1;
+      SFX.merge(32);
+      persist();
+      syncUI();
+      addPopText(`💎 x${getGemMult().toFixed(1)}!`, 0, 36, state.player.z, '#FF6CE6', 1.25);
+    } else { SFX.split(); showToast(t('needGems')); }
+  });
+
+  els.fireBtn.addEventListener('click', () => { SFX.ensure(); fireCannonShell(); });
+
+  els.hatOpenBtn.addEventListener('click', () => {
+    SFX.ensure(); renderHatModal(); els.hatModal.classList.add('active');
+  });
+  els.hatCloseBtn.addEventListener('click', () => els.hatModal.classList.remove('active'));
+  els.hatModal.addEventListener('click', (e) => { if (e.target === els.hatModal) els.hatModal.classList.remove('active'); });
+
+  els.levelOpenBtn.addEventListener('click', () => {
+    SFX.ensure(); renderLevelModal(); els.levelModal.classList.add('active');
+  });
+  els.levelCloseBtn.addEventListener('click', () => els.levelModal.classList.remove('active'));
+  els.levelModal.addEventListener('click', (e) => { if (e.target === els.levelModal) els.levelModal.classList.remove('active'); });
+
+  els.muteBtn.addEventListener('click', () => { SFX.muted = !SFX.muted; syncUI(); });
+  els.resActionBtn.addEventListener('click', () => { SFX.ensure(); buildIslandLevel(save.island); });
+
+  // =========================================================================
+  // 11. Physics & Mechanics Simulation Step
+  // =========================================================================
+  function update(dt) {
+    state.elapsedSession += dt;
+    if (state.hitStop > 0) { state.hitStop -= dt; return; }
+    if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 1.5);
+
+    const p = state.player;
+    p.scalePop += (1 - p.scalePop) * Math.min(1, dt * 12);
+    if (p.invuln > 0) p.invuln -= dt;
+
+    if (state.phase === 'RUNNING') {
+      const steerSpd = 132;
+      if (keys.left) p.targetX -= steerSpd * dt;
+      if (keys.right) p.targetX += steerSpd * dt;
+      p.targetX = Math.max(-TRACK_HALF_W + 9, Math.min(TRACK_HALF_W - 9, p.targetX));
+    } else if (state.phase === 'CANNON_AIM') {
+      if (keys.left) state.cannon.aimX = Math.max(-0.95, state.cannon.aimX - 1.35 * dt);
+      if (keys.right) state.cannon.aimX = Math.min(0.95, state.cannon.aimX + 1.35 * dt);
+    }
+
+    if (gfx.conveyorTex) gfx.conveyorTex.offset.x = -(state.elapsedSession * 1.8) % 1;
+
+    // Update Track Entities
+    for (const ent of state.entities) {
+      if (ent.kind === 'gate' && ent.moving && !ent.taken) {
+        ent.x = ent.baseX + Math.sin(state.elapsedSession * 2.25) * ent.range;
+      } else if (ent.kind === 'saw') {
+        ent.phase += dt * 9.5;
+        if (ent.moving) ent.x = ent.baseX + Math.sin(state.elapsedSession * 2.5 + 1.1) * ent.range;
+      } else if (ent.kind === 'barrel' && !ent.hit) {
+        if (state.phase === 'RUNNING' && ent.z - p.z < 680) {
+          ent.z -= 48 * dt;
+          ent.rot += dt * 7;
+        }
+      } else if (ent.kind === 'spikeGrate') {
+        ent.timer += dt;
+        const cyc = ent.timer % 2.2;
+        ent.warn = cyc > 0.8 && cyc <= 1.25;
+        ent.up = cyc > 1.25;
+      } else if (ent.kind === 'skyBomb' && !ent.exploded) {
+        if (state.phase === 'RUNNING' && p.z >= ent.dropAtZ) {
+          ent.dropping = true;
+          ent.dropProg = Math.min(1, (ent.dropProg || 0) + dt * 1.45);
+          if (ent.dropProg >= 1) {
+            ent.exploded = true;
+            SFX.bombBoom();
+            spawnBurst3D(ent.x, 10, ent.z, 0xFF5A1F, 18, 95, false);
+            if (Math.abs(ent.z - p.z) < 22 && Math.abs(ent.x - p.x) < 21) {
+              splitPlayerNumber(2);
+            }
+          }
+        }
+      } else if (ent.kind === 'gem' && !ent.taken && p.magnetTimer > 0) {
+        const dz = ent.z - p.z;
+        if (dz > -20 && dz < 155) {
+          ent.x += (p.x - ent.x) * Math.min(1, dt * 11);
+          ent.z += (p.z - ent.z) * Math.min(1, dt * 9);
+          ent.y = 10;
+        }
+      }
+    }
+
+    if (state.phase === 'PRE_RUN') {
+      p.rollAngle += dt * 1.8;
+      state.boss.bob += dt * 3.0;
+    } else if (state.phase === 'RUNNING') {
+      state.runTime += dt;
+      if (p.magnetTimer > 0) p.magnetTimer -= dt;
+      if (p.skateTimer > 0) p.skateTimer -= dt;
+
+      // Check Sliding Conveyor Floor Lateral Push!
+      let convPush = 0;
+      for (const ent of state.entities) {
+        if (ent.kind === 'conveyor' && Math.abs(p.z - ent.z) < ent.len * 0.5) {
+          convPush = ent.dir * 54;
+        }
+      }
+      if (convPush !== 0) {
+        p.targetX = Math.max(-TRACK_HALF_W + 9, Math.min(TRACK_HALF_W - 9, p.targetX + convPush * dt));
+      }
+
+      const fwdSpeed = p.skateTimer > 0 ? 238 : 178;
+      const prevX = p.x;
+      p.z += fwdSpeed * dt;
+      p.x += (p.targetX - p.x) * Math.min(1, dt * 16);
+      p.vx = (p.x - prevX) / Math.max(0.001, dt);
+      p.rollAngle += (fwdSpeed * dt) / 12.5;
+      state.boss.bob += dt * 4.2;
+
+      const prog = Math.min(100, Math.max(0, (p.z / state.trackLen) * 100));
+      els.progressFill.style.width = prog.toFixed(1) + '%';
+
+      // Entity Collisions
+      for (const ent of state.entities) {
+        const dz = Math.abs(ent.z - p.z);
+        if (ent.kind === 'man' && !ent.taken && dz < 16 && Math.abs(ent.x - p.x) < 18) {
+          ent.taken = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          if (ent.num === p.num) {
+            upgradePlayerNumber(p.num * 2, `${p.num * 2}`);
+          } else if (ent.num < p.num) {
+            save.gems += Math.max(1, Math.round(getGemMult()));
+            SFX.gem(state.gemCombo++);
+            p.scalePop = 1.18;
+            spawnBurst3D(ent.x, 12, ent.z, 0xFF5CE0, 7, 55, false);
+            addPopText(`+💎`, ent.x, 26, ent.z, '#FF77E9', 0.95);
+            syncUI();
+          } else {
+            upgradePlayerNumber(ent.num, `${ent.num}`);
+          }
+        } else if (ent.kind === 'gate' && !ent.taken && dz < 11 && Math.abs(ent.x - p.x) < ent.w * 0.52) {
+          ent.taken = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          for (const sib of state.entities) {
+            if (sib.kind === 'gate' && Math.abs(sib.z - ent.z) < 3) {
+              sib.taken = true;
+              if (sib.mesh) sib.mesh.visible = false;
+            }
+          }
+          if (ent.op === 'mul') upgradePlayerNumber(p.num * ent.val, `${ent.label}!`);
+          else splitPlayerNumber(ent.val);
+        } else if (ent.kind === 'glassWall' && !ent.broken && dz < 13) {
+          ent.broken = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          SFX.shatter();
+          spawnBurst3D(0, 26, ent.z, 0x56C8FF, 28, 125, true);
+          if (p.num >= ent.num) {
+            state.shake = 0.25;
+            p.scalePop = 1.28;
+            const bonus = Math.round(6 * getGemMult());
+            save.gems += bonus;
+            syncUI();
+            showToast(t('glassBreak'));
+            addPopText(`SHATTER +💎${bonus}`, 0, 42, ent.z, '#7CE8FF', 1.25);
+          } else {
+            splitPlayerNumber(2);
+          }
+        } else if (ent.kind === 'magnet' && !ent.taken && dz < 16 && Math.abs(ent.x - p.x) < 18) {
+          ent.taken = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          p.magnetTimer = 6.8 + save.gemLv * 1.2;
+          SFX.merge(128);
+          showToast(t('magnetOn'));
+          addPopText('🧲 MAGNET!', p.x, 34, p.z, '#70E4FF', 1.15);
+        } else if (ent.kind === 'gem' && !ent.taken && dz < 16 && Math.abs(ent.x - p.x) < 17) {
+          ent.taken = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          save.gems += Math.max(1, Math.round(2 * getGemMult()));
+          SFX.gem(state.gemCombo++);
+          spawnBurst3D(ent.x, 10, ent.z, 0xFF5EE2, 5, 45, false);
+          syncUI();
+        } else if (ent.kind === 'boostPad' && !ent.triggered && dz < 12) {
+          ent.triggered = true;
+          p.skateTimer = 5.0;
+          SFX.merge(512);
+          showToast(t('skateBoost'));
+          addPopText('🔥 NITRO!', p.x, 36, p.z, '#FF6842', 1.2);
+        } else if (ent.kind === 'saw' && !ent.hit && dz < 13 && Math.abs(ent.x - p.x) < 17) {
+          ent.hit = true;
+          splitPlayerNumber(2);
+        } else if (ent.kind === 'barrel' && !ent.hit && dz < 14 && Math.abs(ent.x - p.x) < 16) {
+          ent.hit = true;
+          if (ent.mesh) ent.mesh.visible = false;
+          spawnBurst3D(ent.x, 12, ent.z, 0x9E5E2B, 14, 80, true);
+          splitPlayerNumber(2);
+        } else if (ent.kind === 'spikeGrate' && ent.up && !ent.hit && dz < 12 && Math.abs(ent.x - p.x) < 16) {
+          ent.hit = true;
+          splitPlayerNumber(2);
+        }
+      }
+
+      if (p.z >= state.trackLen) {
+        state.phase = 'PIER_CLIMB';
+        p.targetX = 0;
+        spawnBurst3D(-45, 16, state.trackLen + 8, 0xFF4FD8, 18, 115, false);
+        spawnBurst3D(45,  16, state.trackLen + 8, 0x24E568, 18, 115, false);
+        SFX.merge(p.num);
+      }
+    } else if (state.phase === 'PIER_CLIMB') {
+      p.z += 250 * dt;
+      p.x += (0 - p.x) * Math.min(1, dt * 12);
+      p.rollAngle += (250 * dt) / 12;
+
+      const pierProgress = p.z - state.trackLen;
+      const stepW = state.pierLen / PIER_TIERS.length;
+      const idx = Math.floor(pierProgress / stepW);
+      if (idx >= 0 && idx < PIER_TIERS.length && idx > state.pierStepIdx) {
+        state.pierStepIdx = idx;
+        SFX.pierStep(idx);
+      }
+
+      if (p.z >= state.cannonZ - 46) {
+        const tJump = Math.min(1, (p.z - (state.cannonZ - 46)) / 46);
+        p.y = Math.sin(tJump * Math.PI) * 36;
+      }
+
+      if (p.z >= state.cannonZ) {
+        p.inCannon = true;
+        p.y = 0;
+        state.phase = 'CANNON_AIM';
+        els.progressWrap.style.display = 'none';
+        els.mechanicChip.style.display = 'none';
+        els.cannonControls.classList.add('active');
+        els.cannonHud.classList.add('active');
+        updateCannonHud();
+        SFX.merge(2048);
+      }
+    } else if (state.phase === 'CANNON_AIM') {
+      if (state.cannon.cooldown > 0) state.cannon.cooldown -= dt;
+      if (state.cannon.recoil > 0) state.cannon.recoil = Math.max(0, state.cannon.recoil - dt * 4.5);
+
+      const b = state.boss;
+      if (!b.ragdoll) {
+        b.z -= b.walkSpeed * dt;
+        b.bob += dt * 5.8;
+        b.swayPhase += dt * 1.85;
+        b.x = Math.sin(b.swayPhase) * 26;
+        if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt * 4.5);
+        if (b.z <= state.cannonZ + 62) triggerBossDefeat();
+      }
+    } else if (state.phase === 'CELEBRATE') {
+      const b = state.boss;
+      if (b.ragdoll) {
+        b.ragY += b.ragVy * dt;
+        b.ragVy -= 260 * dt;
+        b.z += b.ragVz * dt;
+        b.ragRot += dt * 6.5;
+        if (b.ragY < -80) b.ragY = -80;
+      }
+      if (state.autoNextTimer > 0) {
+        state.autoNextTimer -= dt;
+        if (state.autoNextTimer <= 0) buildIslandLevel(save.island);
+      }
+    }
+
+    // Update Shells
+    for (let i = state.cannon.shells.length - 1; i >= 0; i--) {
+      const sh = state.cannon.shells[i];
+      sh.progress += dt * 3.1;
+      const u = Math.min(1, sh.progress);
+      sh.x = sh.tx * u;
+      sh.z = (state.cannonZ + 18) + (sh.tz - (state.cannonZ + 18)) * u;
+      sh.y = 20 + (sh.ty - 20) * u + Math.sin(u * Math.PI) * 28;
+      if (sh.mesh) {
+        sh.mesh.position.set(-sh.x, sh.y, sh.z);
+        sh.mesh.rotation.x += dt * 14;
+      }
+      if (sh.progress >= 1) {
+        resolveShellImpact(sh);
+        state.cannon.shells.splice(i, 1);
+      }
+    }
+
+    // Update Grey Clones
+    for (let i = state.clones.length - 1; i >= 0; i--) {
+      const cl = state.clones[i];
+      cl.x += cl.vx * dt;
+      cl.y += cl.vy * dt;
+      cl.z += cl.vz * dt;
+      cl.vy -= 220 * dt;
+      cl.rot += cl.vrot * dt;
+      cl.life -= dt;
+      if (cl.mesh) {
+        cl.mesh.position.set(-cl.x, cl.y, cl.z);
+        cl.mesh.rotation.z = cl.rot;
+      }
+      if (cl.life <= 0) {
+        if (cl.mesh && gfx.dynamicGroup) gfx.dynamicGroup.remove(cl.mesh);
+        state.clones.splice(i, 1);
+      }
+    }
+
+    // Update 3D Particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const pt = state.particles[i];
+      pt.x += pt.vx * dt;
+      pt.y += pt.vy * dt;
+      pt.z += pt.vz * dt;
+      pt.vy -= 220 * dt;
+      pt.rot += pt.vrot * dt;
+      pt.life -= dt;
+      if (pt.mesh) {
+        pt.mesh.position.set(-pt.x, pt.y, pt.z);
+        pt.mesh.rotation.set(pt.rot, pt.rot * 0.7, 0);
+        const s = Math.max(0.05, pt.life / pt.maxLife);
+        pt.mesh.scale.setScalar(s);
+      }
+      if (pt.life <= 0) {
+        if (pt.mesh && gfx.dynamicGroup) gfx.dynamicGroup.remove(pt.mesh);
+        state.particles.splice(i, 1);
+      }
+    }
+
+    // Update 2D HUD Pop Texts
+    for (let i = state.popTexts.length - 1; i >= 0; i--) {
+      const tx = state.popTexts[i];
+      tx.y += tx.vy * dt;
+      tx.life -= dt;
+      if (tx.life <= 0) state.popTexts.splice(i, 1);
+    }
+  }
+
+  // =========================================================================
+  // 12. Sync Three.js Scene & Dual-Viewport Optical Sniper Scope Render
+  // =========================================================================
+  function projectToHud(wx, wy, wz) {
+    if (!hasWebGL || !gfx.mainCam) return null;
+    const v = new THREE.Vector3(-wx, wy, wz);
+    v.project(gfx.mainCam);
+    if (v.z > 1) return null;
+    return {
+      x: (v.x * 0.5 + 0.5) * viewW,
+      y: (-v.y * 0.5 + 0.5) * viewH
+    };
+  }
+
+  function render() {
+    hudCtx.clearRect(0, 0, viewW, viewH);
+    if (!hasWebGL || !gfx.renderer) return;
+
+    const p = state.player;
+    const tier = Math.max(1, Math.log2(Math.max(2, p.num)));
+    const growth = (1 + (tier - 1) * 0.072) * p.scalePop;
+    const radius = 12 * growth;
+
+    // 1. Animate 3D Ocean Waves
+    const posAttr = gfx.oceanGeo.attributes.position;
+    const base = gfx.oceanBasePos;
+    const arr = posAttr.array;
+    const tWave = state.elapsedSession * 2.1;
+    for (let i = 0; i < arr.length; i += 3) {
+      const ox = base[i];
+      const oz = base[i + 2];
+      arr[i + 1] = Math.sin(ox * 0.018 + tWave) * 2.4 + Math.cos(oz * 0.022 + tWave * 1.2) * 2.2;
+    }
+    posAttr.needsUpdate = true;
+
+    // 2. Sync Player 3D Ball Rig
+    gfx.playerRoot.visible = !p.inCannon;
+    if (!p.inCannon) {
+      const pierLift = state.phase === 'PIER_CLIMB' ? Math.max(0, state.pierStepIdx) * 0.35 : 0;
+      gfx.playerRoot.position.set(-p.x, radius + p.y + pierLift, p.z);
+      gfx.playerSphere.scale.setScalar(growth);
+      // Tilt medallion slightly upward (-0.32 rad) toward elevated camera + lively roll bounce while keeping number 100% upright & readable!
+      gfx.playerSphere.rotation.set(-0.34 + Math.sin(p.rollAngle) * 0.16, 0, 0);
+      gfx.playerRoot.rotation.z = Math.max(-0.26, Math.min(0.26, (p.vx || 0) * 0.0022));
+
+      // Hat stays perched on top of sphere!
+      gfx.playerHatGroup.position.set(0, radius - 0.5, 0);
+      gfx.playerHatGroup.scale.setScalar(growth * 0.95);
+
+      // 2048+ Aura
+      gfx.playerAura.material.opacity = p.num >= 2048 ? (0.55 + Math.sin(state.elapsedSession * 8) * 0.2) : 0;
+      gfx.playerAura.scale.setScalar(growth);
+      gfx.playerAura.lookAt(gfx.mainCam.position);
+
+      // Nitro Flame Ring
+      gfx.playerFlameRing.material.opacity = p.skateTimer > 0 ? 0.78 : 0;
+      gfx.playerFlameRing.scale.setScalar(growth * (1.05 + Math.sin(state.elapsedSession * 20) * 0.08));
+
+      // Orbiting Magnets
+      gfx.playerMagnetGroup.visible = p.magnetTimer > 0;
+      gfx.playerMagnetGroup.scale.setScalar(growth);
+      gfx.playerMagnetGroup.rotation.y = state.elapsedSession * 4.5;
+    }
+
+    // 3. Sync Track Dynamic Entities
+    for (const ent of state.entities) {
+      if (!ent.mesh) continue;
+      if (ent.kind === 'man' && !ent.taken) {
+        const bob = Math.abs(Math.sin(state.elapsedSession * 3.8 + ent.z * 0.04)) * 2.2;
+        ent.mesh.position.set(-ent.x, ent.r3d + bob, ent.z);
+        ent.mesh.rotation.set(-0.30, Math.sin(state.elapsedSession * 2 + ent.z) * 0.18, 0);
+      } else if (ent.kind === 'gate' && !ent.taken) {
+        ent.mesh.position.set(-ent.x, 0, ent.z);
+      } else if (ent.kind === 'gem' && !ent.taken) {
+        const bob = Math.sin(state.elapsedSession * 5 + ent.z * 0.06) * 2.4;
+        ent.mesh.position.set(-ent.x, (ent.y || 0) + 9 + bob, ent.z);
+        ent.mesh.rotation.y = state.elapsedSession * 3.2 + ent.z * 0.02;
+      } else if (ent.kind === 'magnet' && !ent.taken) {
+        ent.mesh.position.set(-ent.x, 12 + Math.sin(state.elapsedSession * 4) * 2.5, ent.z);
+        ent.mesh.rotation.y = state.elapsedSession * 2.5;
+      } else if (ent.kind === 'saw') {
+        ent.mesh.position.set(-ent.x, 0.5, ent.z);
+        if (ent.disc) ent.disc.rotation.z = ent.phase;
+      } else if (ent.kind === 'barrel' && !ent.hit) {
+        ent.mesh.position.set(-ent.x, 9.5, ent.z);
+        ent.mesh.rotation.x = ent.rot;
+      } else if (ent.kind === 'spikeGrate') {
+        ent.plateMat.color.setHex(ent.up ? 0xD93838 : (ent.warn ? 0xFF8C24 : 0x556070));
+        ent.spikes.position.y = ent.up ? 0 : -13.5;
+      } else if (ent.kind === 'skyBomb') {
+        if (ent.exploded) {
+          ent.mesh.visible = false;
+          ent.ring.visible = false;
+        } else {
+          const pulse = 1 + Math.sin(state.elapsedSession * 12) * 0.14;
+          ent.ring.scale.setScalar(pulse);
+          if (ent.dropping) {
+            ent.mesh.visible = true;
+            const u = ent.dropProg || 0;
+            ent.mesh.position.set(-ent.x, (1 - u * u) * 145 + 10, ent.z);
+          }
+        }
+      }
+    }
+
+    // 4. Sync Boss 3D Rig & Naval Cannon
+    const b = state.boss;
+    if (gfx.bossRoot) {
+      const horizonScale = (state.phase === 'PRE_RUN' || state.phase === 'RUNNING') ? 1.55 : 1.0;
+      const stomp = b.ragdoll ? 0 : Math.abs(Math.sin(b.bob)) * 7;
+      gfx.bossRoot.position.set(-b.x, (b.ragdoll ? b.ragY : stomp) - 6, b.z);
+      gfx.bossRoot.scale.setScalar(horizonScale);
+      if (b.ragdoll) {
+        gfx.bossRoot.rotation.x = -b.ragRot;
+        gfx.bossRoot.rotation.z = b.ragRot * 0.6;
+      } else {
+        gfx.bossRoot.rotation.set(0, 0, 0);
+      }
+      if (gfx.bossLimbs) {
+        const sw = Math.sin(b.bob) * 0.45;
+        gfx.bossLimbs.legL.rotation.x = sw;
+        gfx.bossLimbs.legR.rotation.x = -sw;
+        gfx.bossLimbs.armL.rotation.x = -sw * 1.2;
+        gfx.bossLimbs.armR.rotation.x = sw * 1.2;
+        gfx.bossLimbs.mainMat.color.setHex(b.hitFlash > 0 ? 0xFFF2B2 : gfx.bossLimbs.baseColor);
+        gfx.bossLimbs.critGem.rotation.y = state.elapsedSession * 5;
+      }
+    }
+
+    if (gfx.cannonBarrelPivot) {
+      gfx.cannonBarrelPivot.rotation.y = -state.cannon.aimX * 0.35;
+      gfx.cannonBarrelPivot.rotation.x = -(state.cannon.aimY - 0.5) * 0.35;
+      gfx.cannonBarrelPivot.position.z = -state.cannon.recoil * 7;
+    }
+
+    // 5. Position Camera & Directional Shadow Frustum
+    const shakeX = state.shake > 0 ? (Math.random() - 0.5) * 8 * state.shake : 0;
+    const shakeY = state.shake > 0 ? (Math.random() - 0.5) * 8 * state.shake : 0;
+
+    if (state.phase === 'CANNON_AIM' || state.phase === 'CELEBRATE' || state.phase === 'RESULT') {
+      gfx.mainCam.position.set(shakeX, 62 + shakeY, state.cannonZ - 76);
+      gfx.mainCam.lookAt(0, 48, state.boss.z);
+    } else {
+      const camBack = 118 + tier * 2.2;
+      const camUp = 66 + tier * 1.6;
+      gfx.mainCam.position.set(-p.x * 0.36 + shakeX, camUp + shakeY, p.z - camBack);
+      gfx.mainCam.lookAt(-p.x * 0.18, 6, p.z + 115);
+    }
+
+    gfx.sun.position.set(-160, 320, gfx.mainCam.position.z + 120);
+    gfx.sun.target.position.set(0, 0, gfx.mainCam.position.z + 260);
+
+    // 6. Main Full-Screen 3D Render Pass
+    gfx.renderer.setViewport(0, 0, viewW, viewH);
+    gfx.renderer.setScissorTest(false);
+    gfx.renderer.render(gfx.scene, gfx.mainCam);
+
+    // 7. Draw 2D HUD Overlay: Boss Overhead HP Bar, Optical Sniper Reticle & Pop Texts!
+    if (!b.ragdoll) {
+      const hpPos = projectToHud(b.x, (state.phase === 'PRE_RUN' || state.phase === 'RUNNING') ? 215 : 142, b.z);
+      if (hpPos) {
+        const bw = state.phase === 'CANNON_AIM' ? 116 : 68;
+        const bh = state.phase === 'CANNON_AIM' ? 12 : 8;
+        hudCtx.fillStyle = 'rgba(12, 22, 38, 0.85)';
+        hudCtx.beginPath();
+        hudCtx.roundRect(hpPos.x - bw * 0.5 - 2, hpPos.y - bh * 0.5 - 2, bw + 4, bh + 4, 5);
+        hudCtx.fill();
+        const ratio = Math.max(0, b.hp / b.maxHp);
+        hudCtx.fillStyle = ratio > 0.35 ? '#22E64B' : '#FF4238';
+        if (ratio > 0) {
+          hudCtx.beginPath();
+          hudCtx.roundRect(hpPos.x - bw * 0.5, hpPos.y - bh * 0.5, bw * ratio, bh, 4);
+          hudCtx.fill();
+        }
+      }
+    }
+
+    // Real 3D Second-Pass Optical Sniper Scope in CANNON_AIM!
+    if (state.phase === 'CANNON_AIM') {
+      const targetWX = state.cannon.aimX * 68;
+      const targetWY = Math.max(10, state.cannon.aimY * 138);
+      const aimHud = projectToHud(targetWX, targetWY, b.z) || { x: viewW * 0.5, y: viewH * 0.42 };
+
+      const scopeR = Math.round(Math.min(viewW, viewH) * 0.25);
+      const cx = Math.max(scopeR + 14, Math.min(viewW - scopeR - 14, aimHud.x));
+      const cy = Math.max(scopeR + 58, Math.min(viewH - scopeR - 95, aimHud.y));
+
+      // Render zoomed 3D scope camera into square scissor box centered at (cx, cy)!
+      gfx.scopeCam.position.copy(gfx.mainCam.position);
+      gfx.scopeCam.lookAt(-targetWX, targetWY, b.z);
+      const vpX = Math.round(cx - scopeR);
+      const vpY = Math.round(viewH - (cy + scopeR)); // WebGL bottom-left origin!
+      gfx.renderer.setScissorTest(true);
+      gfx.renderer.setViewport(vpX, vpY, scopeR * 2, scopeR * 2);
+      gfx.renderer.setScissor(vpX, vpY, scopeR * 2, scopeR * 2);
+      gfx.renderer.render(gfx.scene, gfx.scopeCam);
+      gfx.renderer.setScissorTest(false);
+
+      // Mask corners outside circular sniper ring on HUD canvas & draw crisp crosshairs!
+      hudCtx.save();
+      hudCtx.beginPath();
+      hudCtx.rect(cx - scopeR - 4, cy - scopeR - 4, scopeR * 2 + 8, scopeR * 2 + 8);
+      hudCtx.arc(cx, cy, scopeR, 0, Math.PI * 2, true);
+      hudCtx.fillStyle = 'rgba(10, 28, 52, 0.58)';
+      hudCtx.fill();
+
+      const onWeakSpot = Math.abs(targetWX - b.x) < 20 && Math.abs(targetWY - 94) < 21;
+
+      hudCtx.strokeStyle = '#0C1626';
+      hudCtx.lineWidth = 7;
+      hudCtx.beginPath();
+      hudCtx.arc(cx, cy, scopeR, 0, Math.PI * 2);
+      hudCtx.stroke();
+
+      hudCtx.strokeStyle = 'rgba(12, 22, 38, 0.82)';
+      hudCtx.lineWidth = 2;
+      hudCtx.beginPath();
+      hudCtx.moveTo(cx - scopeR, cy); hudCtx.lineTo(cx + scopeR, cy);
+      hudCtx.moveTo(cx, cy - scopeR); hudCtx.lineTo(cx, cy + scopeR);
+      hudCtx.stroke();
+
+      hudCtx.fillStyle = onWeakSpot ? '#FFE433' : '#FF3B30';
+      hudCtx.beginPath();
+      hudCtx.arc(cx, cy, onWeakSpot ? 6.5 : 4.5, 0, Math.PI * 2);
+      hudCtx.fill();
+
+      if (onWeakSpot) {
+        hudCtx.strokeStyle = '#FFE433';
+        hudCtx.lineWidth = 2.6;
+        hudCtx.beginPath();
+        hudCtx.arc(cx, cy, 16 + Math.sin(state.elapsedSession * 14) * 2.5, 0, Math.PI * 2);
+        hudCtx.stroke();
+
+        hudCtx.font = '900 13px "Nunito", system-ui, sans-serif';
+        hudCtx.textAlign = 'center';
+        hudCtx.lineWidth = 3.5;
+        hudCtx.strokeStyle = '#0B1626';
+        const critLabel = '🎯 CRIT LOCK x1.5!';
+        hudCtx.strokeText(critLabel, cx, cy - 24);
+        hudCtx.fillStyle = '#FFE433';
+        hudCtx.fillText(critLabel, cx, cy - 24);
+      }
+      hudCtx.restore();
+    }
+
+    // Floating Pop Texts
+    for (const tx of state.popTexts) {
+      const pos = projectToHud(tx.x, tx.y, tx.z);
+      if (!pos) continue;
+      hudCtx.save();
+      hudCtx.globalAlpha = Math.min(1, (tx.life / tx.maxLife) * 1.4);
+      const fpx = Math.max(14, 19 * tx.scale);
+      hudCtx.font = `900 ${fpx}px "Nunito", system-ui, sans-serif`;
+      hudCtx.textAlign = 'center';
+      hudCtx.textBaseline = 'middle';
+      hudCtx.lineWidth = 4;
+      hudCtx.strokeStyle = 'rgba(8, 16, 30, 0.88)';
+      hudCtx.strokeText(tx.text, pos.x, pos.y);
+      hudCtx.fillStyle = tx.color;
+      hudCtx.fillText(tx.text, pos.x, pos.y);
+      hudCtx.restore();
+    }
+  }
+
+  // =========================================================================
+  // 13. Resize, Loop & Deterministic 3-Tier Bot Evaluation Harness
+  // =========================================================================
+  function resize() {
+    viewW = Math.max(280, window.innerWidth);
+    viewH = Math.max(360, window.innerHeight);
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    hudCanvas.width = Math.floor(viewW * dpr);
+    hudCanvas.height = Math.floor(viewH * dpr);
+    hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (hasWebGL && gfx.renderer) {
+      gfx.renderer.setPixelRatio(dpr);
+      gfx.renderer.setSize(viewW, viewH, false);
+      gfx.mainCam.aspect = viewW / viewH;
+      gfx.mainCam.updateProjectionMatrix();
+    }
+    render();
+  }
+
+  window.addEventListener('resize', resize);
+
+  let rafId = null;
+  let lastTs = 0;
+  function frame(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000));
+    lastTs = ts;
+    update(dt);
+    render();
+    rafId = requestAnimationFrame(frame);
+  }
+
+  // Expose GameAdapter + 3-Tier Bot Probe for Sawtooth Curve Verification!
+  window.GameHarness = {
+    getState() {
+      return {
+        phase: state.phase,
+        island: save.island,
+        playerNum: state.player.num,
+        playerZ: Math.round(state.player.z),
+        playerX: Math.round(state.player.x),
+        gems: save.gems,
+        bossHp: state.boss.hp,
+        bossMaxHp: state.boss.maxHp,
+        ammo: state.cannon.ammo,
+        entities: state.entities
+      };
+    },
+    loadLevel(lvl, startLv, powerLv) {
+      save.island = lvl;
+      if (typeof startLv === 'number') save.startLv = startLv;
+      if (typeof powerLv === 'number') save.powerLv = powerLv;
+      save.consecutiveLosses = 0;
+      buildIslandLevel(lvl);
+      return this.getState();
+    },
+    step(dtSec, targetX) {
+      if (state.phase === 'PRE_RUN') startRunningIfReady();
+      if (typeof targetX === 'number') state.player.targetX = targetX;
+      update(dtSec || 0.033);
+      return this.getState();
+    },
+    aimAndFireHeadshot(accuracyNoise) {
+      const noise = accuracyNoise || 0;
+      state.cannon.aimX = (state.boss.x + noise) / 68;
+      state.cannon.aimY = (94 + noise * 0.6) / 138;
+      fireCannonShell();
+      return this.getState();
+    }
+  };
+
+  window.onload = function() {
+    initThreeEngine();
+    resize();
+    buildIslandLevel(save.island);
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(frame);
+  };
+})();
+</script>
+</body>
+</html>
